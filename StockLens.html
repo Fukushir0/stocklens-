@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="StockLens">
+<title>StockLens</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { background: #0d1117; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; padding: 20px 16px 40px; max-width: 680px; margin: 0 auto; }
+  input { outline: none; -webkit-appearance: none; }
+  input:focus { border-color: #00e5a0 !important; }
+  .chip { cursor: pointer; border: none; transition: all 0.15s; -webkit-tap-highlight-color: transparent; }
+  .chip:active { transform: scale(0.95); }
+  .tab-btn { cursor: pointer; transition: all 0.2s; }
+  .score-bar-inner { transition: width 0.8s ease; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  .fade-in { animation: fadeIn 0.3s ease; }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script>
+const ALL_DATA = {
+  NOW:  { name:"ServiceNow", sector:"Enterprise SaaS", pe:60.8, ps:7.5, gm:76.6, rg:22, om:14.7, de:0.21, fcf:4.6, score:7, bw:6, wa:8, gs:9, qu:8, zusammenfassung:"ServiceNow ist fundamental eines der stärksten SaaS-Unternehmen der Welt. 22% Wachstum, 76% Bruttomarge und 4,6 Mrd. FCF – alles stark. Der -50% Kursrückgang macht die Bewertung deutlich attraktiver.", bw_t:"KGV 60 klingt hoch, aber Forward-KGV ~23 ist für 22% Wachstum fair. PEG Ratio 0.95 signalisiert faire Bewertung. Durch den Kursrückgang deutlich günstiger als früher.", wa_t:"22% Umsatzwachstum bei fast 14 Mrd. $ Umsatz ist beeindruckend stark. Now Assist KI-Kunden wuchsen 130% YoY. RPO 27,7 Mrd. $ sichert zukünftige Umsätze.", gs_t:"Bilanz nahezu makellos: D/E nur 0,21, FCF 4,63 Mrd. $, Bruttomarge 76%. Einziger Schwachpunkt: Current Ratio 0,84 etwas eng.", qu_t:"Bill McDermott ist einer der besten CEOs im Tech-Bereich. Wechselkosten extrem hoch – wer ServiceNow integriert, wechselt kaum. 630 Kunden mit >5M$ ACV.", staerken:["RPO 27,7 Mrd. $ – gesicherter Zukunftsumsatz","Now Assist KI-Kunden +130% YoY","FCF 4,63 Mrd. $ – starke Cash-Maschine"], risiken:["KI-Agenten könnten Workflows ersetzen","Armis-Akquisition belastet Margen kurzfristig","Aktie -50% in 12 Monaten – Marktangst groß"], fazit:"ServiceNow ist fundamental top und durch den Kursrückgang attraktiv bewertet. 48 Analysten vergeben Strong Buy mit Kursziel ~143$ – das wäre ~40% Upside." },
+  FTNT: { name:"Fortinet", sector:"Cybersecurity", pe:45.0, ps:10.5, gm:80.0, rg:20, om:31.0, de:0.5, fcf:2.2, score:8, bw:7, wa:7, gs:8, qu:8, zusammenfassung:"Fortinet ist der qualitativ stärkste Cybersecurity-Wert – organisches Wachstum, top Margen und ein einzigartiges integriertes Plattformmodell. Q1 2026 schlug alle Erwartungen.", bw_t:"KGV ~45 ist für ein Cybersecurity-Unternehmen mit 20% Wachstum und 31% Operating Margin fair. Bewertung ist Premium, aber gerechtfertigt durch die Qualität.", wa_t:"20% Umsatzwachstum in Q1 2026, Billings +31% – das zeigt Beschleunigung. SASE und SecOps wachsen besonders stark. Guidance für 2026 angehoben.", gs_t:"FCF 2,2 Mrd. $, Operating Margin 31% GAAP, Bruttomarge 80%. Finanzgesundheit ist ausgezeichnet. Fortinet übertrifft seit Jahren die 'Rule of 45'.", qu_t:"Gründer Ken Xie führt das Unternehmen seit Beginn – seltene Kombination aus Gründermentalität und professionellem Management.", staerken:["Einziger großer Cybersecurity-Anbieter mit rein organischem Wachstum","80% Bruttomarge – bestes Margin-Profil der Branche","SASE und SecOps wachsen >30% YoY"], risiken:["Bewertung lässt kaum Fehlertoleranz","Wettbewerb von Palo Alto und CrowdStrike intensiv","Hardware-Upgrade-Zyklus abhängig von Makro"], fazit:"Fortinet ist ein Qualitätsunternehmen erster Güte. Die Kombination aus Wachstumsbeschleunigung, Top-Margen und technologischer Führerschaft macht es zum attraktivsten Cybersecurity-Investment 2026." },
+  AMZN: { name:"Amazon", sector:"Cloud / E-Commerce / AI", pe:38.0, ps:3.8, gm:49.5, rg:11, om:11.0, de:0.8, fcf:38.0, score:9, bw:8, wa:8, gs:8, qu:9, zusammenfassung:"Amazon ist mehr als E-Commerce – AWS ist das profitabelste Cloud-Geschäft der Welt und wächst gerade auf Hochtouren. Q1 2026 zeigte AWS-Wachstum auf dem höchsten Level seit 15 Quartalen.", bw_t:"KGV 38 sieht hoch aus, aber AWS allein ist 70%+ des Gewinns wert. KUV von 3,8 ist für ein Unternehmen dieser Diversität extrem günstig.", wa_t:"AWS wuchs Q1 2026 auf seinem höchsten Tempo seit 15 Quartalen. Gesamt-Umsatz +11% – aber die Profitabilität beschleunigt viel stärker als das Wachstum.", gs_t:"FCF 38 Mrd. $ und steigend. D/E 0,8 ist für Amazons Größe handhabbar. Riesige Cash-Reserven für weitere KI-Investitionen.", qu_t:"Andy Jassy transformiert Amazon in eine KI-First-Company. AWS, Bedrock, Alexa+ – klare KI-Strategie. Amazon investiert 2026 über 100 Mrd. $ in KI-Infrastruktur.", staerken:["AWS wächst auf höchstem Tempo seit 15 Quartalen","E-Commerce-Moat durch Prime + Logistics unangreifbar","FCF 38 Mrd. $ – Finanzierungspower für KI"], risiken:["Antitrust-Risiken in USA und EU","Capex 2026 >100 Mrd. $ belastet kurzfristig FCF","Retail-Margen sehr dünn und zyklisch"], fazit:"Amazon ist fundamental ein Top-Investment. AWS als Wachstumsmotor, E-Commerce als Cash-Cow und massive KI-Investments. Bei KUV 3,8 ist man beim günstigsten Qualitätsunternehmen der Welt dabei." },
+  PLTR: { name:"Palantir", sector:"AI / Defense Software", pe:153.0, ps:45.0, gm:84.0, rg:56, om:38.0, de:0.0, fcf:1.2, score:7, bw:3, wa:10, gs:9, qu:9, zusammenfassung:"Palantir ist das faszinierendste und riskanteste KI-Investment. Q1 2026: +85% Umsatzwachstum, 53% Profitmarge – fundamental spektakulär. Aber KGV 153 macht jeden Fehler teuer.", bw_t:"KGV 153 ist extrem hoch – selbst für 85% Wachstum. Man zahlt sehr viel für zukünftiges Wachstum. Wer kauft, wettet auf dauerhaft hohes Wachstum für viele Jahre.", wa_t:"85% Umsatzwachstum in Q1 2026, EPS schlug Erwartungen um 41%. Umsatz 2025: +56% auf 4,48 Mrd. $. Wachstum beschleunigt sich – außergewöhnlich.", gs_t:"Nahezu schuldenfrei (D/E ~0), über 8 Mrd. $ Cash. Operating Margin 38%, Bruttomarge 84%. Finanzielle Fortress.", qu_t:"Alex Karp ist eine polarisierende, aber visionäre Führungsfigur. Government + Commercial AI-Plattform einzigartig. AIP als Differenzierungsmerkmal unübertroffen.", staerken:["85% Umsatzwachstum Q1 2026 – beschleunigend","84% Bruttomarge – höchste im Software-Bereich","Government-Verträge als dauerhafte Einnahmequelle"], risiken:["KGV 153 – extremes Bewertungsrisiko","Wachstum müsste dauerhaft >40% bleiben zur Rechtfertigung","Abhängigkeit von US-Regierungsverträgen politisch riskant"], fazit:"Palantir ist fundamental beeindruckend – aber die Bewertung ist eine Wette auf dauerhaft explosives Wachstum. Nur für risikobewusste Investoren mit klarer KI-Government-Überzeugung." },
+  RKLB: { name:"Rocket Lab", sector:"Space / Defense", pe:null, ps:120.0, gm:30.0, rg:46, om:-20.0, de:1.2, fcf:-0.2, score:6, bw:3, wa:9, gs:5, qu:8, zusammenfassung:"Rocket Lab ist das aufregendste Space-Investment abseits von SpaceX. 63% Wachstum Q1 2026, 2,2 Mrd. $ Backlog – aber noch unprofitabel und hoch bewertet.", bw_t:"Kein KGV (Verluste). KUV ~120 ist extrem hoch – man kauft eine Vision, keine aktuelle Profitabilität. Nur für langfristige Wachstumsinvestoren.", wa_t:"63% Umsatzwachstum Q1 2026, Backlog 2,2 Mrd. $ – das ist Sichtbarkeit für zukünftiges Wachstum. Space Force Vertrag 90 Mio. $ zeigt Eintritt ins Defense-Segment.", gs_t:"Noch negativer FCF, aber über 2 Mrd. $ Liquidität. D/E 1,2 vertretbar. Margen steigen – Weg zur Profitabilität erkennbar.", qu_t:"Peter Beck ist einer der besten Raumfahrt-Unternehmer weltweit. Neutron-Rakete als nächster großer Wachstumstreiber.", staerken:["Einzige öffentliche Alternative zu SpaceX","Backlog 2,2 Mrd. $ – Revenue-Sichtbarkeit","NASA + Space Force Verträge sichern Auslastung"], risiken:["Noch unprofitabel – Operating Margin negativ","Neutron-Rakete noch in Entwicklung","Valuation extrem hoch für aktuelle Revenue-Basis"], fazit:"Rocket Lab ist eine langfristige Wette auf die Space Economy. Stark wachsend, aber noch tief unprofitabel. Nur mit kleiner Position und 5+ Jahren Zeithorizont sinnvoll." },
+  ANET: { name:"Arista Networks", sector:"Cloud Networking", pe:47.0, ps:16.0, gm:64.0, rg:20, om:40.0, de:0.0, fcf:3.2, score:8, bw:7, wa:7, gs:9, qu:9, zusammenfassung:"Arista Networks ist der unbesungene Held der KI-Infrastruktur. Wer KI-Rechenzentren baut, braucht Arista-Netzwerke. 40% Operating Margin bei 20% Wachstum ist weltklasse.", bw_t:"KGV ~47 ist für 40% Operating Margin und schuldenfreie Bilanz fair. Arista ist teuer – aber Qualität hat ihren Preis.", wa_t:"20% Umsatzwachstum stabil. Profitabilität wächst schneller als Umsatz. Meta, Microsoft und Amazon sind Hauptkunden – sichere Einnahmen.", gs_t:"Schuldenfrei (D/E ~0), FCF 3,2 Mrd. $, Operating Margin 40%. Eine der gesündesten Bilanzen im Tech-Bereich.", qu_t:"Jayshree Ullal ist eine außergewöhnliche CEO. Arista hat den Netzwerkmarkt von Cisco übernommen – durch technische Überlegenheit.", staerken:["KI-Rechenzentrum-Boom treibt Nachfrage direkt","40% Operating Margin – best-in-class","Schuldenfrei mit starkem FCF"], risiken:["Cisco ist ein gefährlicher Konkurrent","Konzentration auf wenige Großkunden","Konjunktur-sensitiv: Capex-Cuts der Hyperscaler"], fazit:"Arista profitiert direkt vom KI-Boom ohne KI-Disruptions-Risiko. Die Aktie ist teuer, aber fundamental gerechtfertigt. Langfristiger Kauf." },
+  NFLX: { name:"Netflix", sector:"Streaming / Entertainment", pe:34.0, ps:9.5, gm:43.0, rg:16, om:28.0, de:0.8, fcf:8.0, score:8, bw:7, wa:7, gs:7, qu:8, zusammenfassung:"Netflix hat sich neu erfunden: Werbefinanziertes Tier, Live-Sports, Games. 16% Wachstum bei 280 Mio. Abonnenten – und die Margen explodieren. KGV 34 ist fair.", bw_t:"KGV 34 für 16% Wachstum und 28% Operating Margin ist fair. Netflix handelt günstiger als viele erwarten für die Qualität.", wa_t:"16% Umsatzwachstum stabil. Ad-Tier wächst rapide. Live-Events (WWE, NFL) bringen neue Abonnenten. Password-Sharing zeigt nachhaltigen Effekt.", gs_t:"FCF 8 Mrd. $ und deutlich steigend. Operating Margin 28% – Netflix wird zur echten Profitmaschine. Schulden vertretbar.", qu_t:"Ted Sarandos und Greg Peters führen sehr kompetent. Netflix ist nicht mehr nur Streaming – es ist eine vollständige Entertainment-Plattform.", staerken:["280 Mio. Abonnenten – weltgrößte Streaming-Plattform","Werbetier + Live-Events als neue Wachstumstreiber","FCF 8 Mrd. $ – starke Profitabilisierung"], risiken:["Zunehmender Content-Wettbewerb (Disney+, Max)","Content-Kosten bleiben hoch","Marktsättigung in Kernmärkten USA/Europa"], fazit:"Netflix ist nicht mehr teuer – KGV 34 bei dieser Profitabilisierung ist fair. Als Qualitätswert für den langfristigen Investor absolut geeignet." },
+  AMD:  { name:"AMD", sector:"Semiconductors / AI Chips", pe:100.0, ps:8.5, gm:53.0, rg:36, om:12.0, de:0.06, fcf:3.5, score:7, bw:5, wa:8, gs:8, qu:7, zusammenfassung:"AMD ist der einzige ernsthafte NVIDIA-Konkurrent im KI-Chip-Markt. MI300X/MI350 gewinnen Marktanteile. 36% Umsatzwachstum bei noch relativ fairer Bewertung.", bw_t:"KGV ~100 ist hoch, aber AMD wächst 36% und der Gewinn skaliert stark. Für einen Semiconductor-Wert mit dieser KI-Positionierung vertretbar.", wa_t:"36% Umsatzwachstum, Data Center Segment explodiert. MI300X gewinnt Kunden von NVIDIA. Q1 2026: Revenue 10,25 Mrd. $ – Rekord.", gs_t:"Nahezu schuldenfrei (D/E 0,06), FCF 3,5 Mrd. $. Gesunde Bilanz. Bruttomarge 53% ist für Halbleiter gut, aber unter NVIDIA.", qu_t:"Lisa Su ist die beste Halbleiter-CEO der Welt – hat AMD von fast-bankrott zu NVIDIA-Konkurrent gemacht.", staerken:["Einziger ernsthafter NVIDIA-Konkurrent bei KI-Chips","Lisa Su – beste Halbleiter-CEO weltweit","Data Center wächst rasant"], risiken:["NVIDIA-Vorsprung bei Software (CUDA) schwer aufzuholen","Gaming-Segment schwächelt","Bruttomarge unter NVIDIA – struktureller Nachteil"], fazit:"AMD ist die risikoärmere KI-Chip-Alternative zu NVIDIA. Lisa Su liefert konstant, die KI-Story ist intakt. Bei aktueller Bewertung fair bis leicht teuer." },
+  NVDA: { name:"NVIDIA", sector:"AI Chips / Infrastructure", pe:32.9, ps:20.0, gm:74.2, rg:70, om:64.0, de:0.07, fcf:60.0, score:9, bw:8, wa:10, gs:9, qu:10, zusammenfassung:"NVIDIA ist das Unternehmen der Dekade. 70% Umsatzwachstum, 64% Operating Margin, FCF 60+ Mrd. $. Q1 2027: Umsatz 81,6 Mrd. $ – ein einziges Quartal. KGV 33 für diese Qualität ist günstig.", bw_t:"KGV 33 bei 70% Wachstum und PEG 0,49 ist fundamental günstig. NVIDIA ist das einzige Unternehmen der Welt das bei dieser Größe noch so schnell wächst.", wa_t:"70% Umsatzwachstum bei 253 Mrd. $ TTM-Umsatz ist historisch einmalig. Data Center allein macht 91% der Revenue aus und wächst 75% YoY.", gs_t:"D/E nur 0,07 – nahezu schuldenfrei. FCF 60+ Mrd. $. ROE 114% – unerreicht unter Mega-Caps. Bilanz ist eine Festung.", qu_t:"Jensen Huang ist der visionärste Tech-CEO seit Steve Jobs. CUDA als Software-Moat ist das stärkste Wettbewerbsmodell im Tech-Bereich.", staerken:["CUDA-Software-Moat – praktisch unlösbar","Blackwell-Architektur 2-3 Jahre technologisch vorn","FCF 60 Mrd. $ – reinvestiert in R&D und Buybacks"], risiken:["China-Export-Beschränkungen kosten Milliarden Umsatz","Bewertung sensitiv bei Wachstumsverlangsamung","AMD und Custom Chips als langfristige Gefahr"], fazit:"NVIDIA ist das qualitativ beste Unternehmen der Welt – und bei KGV 33 und PEG 0,49 noch nicht einmal teuer. Eines der klarsten Langfrist-Investments des Jahrzehnts." },
+  SHOP: { name:"Shopify", sector:"E-Commerce Platform / SaaS", pe:80.0, ps:14.0, gm:59.0, rg:27, om:18.0, de:0.12, fcf:2.1, score:7, bw:5, wa:8, gs:7, qu:8, zusammenfassung:"Shopify ist die dominante E-Commerce-Infrastruktur – 10% des US-E-Commerce laufen über Shopify. 27% Wachstum und steigende Margen. Bewertung noch sportlich.", bw_t:"KGV 80 ist hoch. KUV 14 auch. Shopify ist nicht günstig – man kauft ein Premium-Wachstumsunternehmen. Gerechtfertigt wenn 25%+ Wachstum anhält.", wa_t:"27% Umsatzwachstum stabil. Merchant Solutions (Payments, Loans) wächst schneller als Subscriptions. Internationalisierung als Hebel.", gs_t:"D/E 0,12 – kaum Schulden. FCF 2,1 Mrd. $ und steigend. Operating Margin 18% verbessert sich.", qu_t:"Tobi Lütke ist ein außergewöhnlicher Gründer-CEO. Shopify hat Amazon-Angst überwunden und eigene Stärken ausgebaut.", staerken:["10% des US-E-Commerce – strukturelle Marktführerschaft","Merchant Solutions wächst schnell (Payments, Capital)","Kaum Schulden, steigender FCF"], risiken:["Bewertung KGV 80 lässt wenig Fehlertoleranz","Amazon baut eigene Seller-Infrastruktur aus","Makro-abhängig bei Konsumflaute"], fazit:"Shopify ist ein Qualitätswert für langfristige Wachstumsinvestoren. Sportliche Bewertung, aber starke Marktposition. Wer in E-Commerce-Infrastruktur investieren will, kommt kaum vorbei." },
+  META: { name:"Meta Platforms", sector:"Social Media / AI / VR", pe:22.0, ps:7.5, gm:81.0, rg:22, om:41.0, de:0.12, fcf:52.0, score:9, bw:9, wa:8, gs:9, qu:8, zusammenfassung:"Meta ist fundamental das attraktivste Investment unter den Magnificent 7. KGV 22, FCF 52 Mrd. $, 33% Umsatzwachstum Q1 2026 – und trotzdem günstiger als der S&P 500 Durchschnitt.", bw_t:"KGV 22 bei 22% Wachstum und 41% Operating Margin ist ein klares Schnäppchen. P/FCF 29 – Meta ist für die Qualität fundamental günstig.", wa_t:"Q1 2026: +33% Umsatzwachstum auf 56,3 Mrd. $. 3,56 Mrd. Daily Active People. Ad-Preise steigen, KI erhöht Relevanz weiter.", gs_t:"FCF 52 Mrd. $, Bruttomarge 81%, D/E 0,12. Bilanz ist eine Festung. Reality Labs verliert Geld, aber Family of Apps finanziert es locker.", qu_t:"Mark Zuckerberg hat Meta nach dem 2022-Crash neu erfunden. Llama, KI-Assistenten, Threads – klare KI-Strategie mit eigenen Modellen.", staerken:["KGV 22 – günstigster Magnificent-7-Wert","FCF 52 Mrd. $ – massives Aktienrückkaufprogramm","3,56 Mrd. Daily Active People – unschlagbare Reichweite"], risiken:["Reality Labs verbrennt Milliarden ohne klaren ROI","Regulierung in EU sehr teuer","Capex 2026 massiv erhöht (125-145 Mrd. $)"], fazit:"Meta ist das klarste Schnäppchen unter den großen Tech-Werten. KGV 22 für diese Wachstumsdynamik ist nicht gerechtfertigt günstig. Einer der überzeugendsten Langfrist-Käufe 2026." },
+  AAPL: { name:"Apple", sector:"Consumer Electronics / Software", pe:32.1, ps:8.2, gm:46.3, rg:4, om:31.5, de:1.97, fcf:108.0, score:8, bw:6, wa:5, gs:7, qu:9, zusammenfassung:"Apple ist das profitabelste Unternehmen der Welt mit dem stärksten Konsumenten-Ökosystem. Wachstum verlangsamt sich, aber Services beschleunigen stark.", bw_t:"KGV 32 fair für Apples Qualität. Services-Segment mit 77% Marge wächst 16% und rechtfertigt Premium.", wa_t:"Nur 4% Gesamtwachstum enttäuscht, aber Services +16% zeigt Transformation. 2,5 Mrd. aktive Geräte als Wachstumsplattform.", gs_t:"FCF 108 Mrd. $ – größte Cash-Maschine der Welt. Hohe Schulden kein Problem bei dieser Cash-Generierung.", qu_t:"Tim Cook managt das Imperium solide. KI-Integration läuft langsamer als Konkurrenz – ein echtes Risiko.", staerken:["FCF 108 Mrd. $ – nie dagewesene Cash-Generierung","Services 77% Marge und 16% Wachstum","1 Mrd. iPhones – größtes Ökosystem der Welt"], risiken:["Wachstumsverlangsamung in Hardware","China-Abhängigkeit in Produktion und Umsatz","KI hinkt hinter Google und Microsoft her"], fazit:"Apple ist kein Wachstumswert mehr, sondern Quality-Compounder. Stabile, vorhersehbare Renditen für konservative Investoren." },
+  MSFT: { name:"Microsoft", sector:"Cloud / Enterprise / AI", pe:34.5, ps:12.1, gm:69.4, rg:16, om:45.0, de:0.31, fcf:70.0, score:9, bw:7, wa:8, gs:9, qu:9, zusammenfassung:"Microsoft ist der unangefochtene Enterprise-König. Azure wächst stark, Copilot monetarisiert KI bereits und die Margen sind außergewöhnlich.", bw_t:"KGV 34 für 45% Operating Margin und 16% Wachstum ist sehr fair. Microsoft ist der qualitativ stärkste Enterprise-Wert.", wa_t:"Azure Cloud wächst 29% YoY. Copilot-Monetarisierung läuft an. 16% Gesamtwachstum bei 245 Mrd. $ Umsatz ist beeindruckend.", gs_t:"D/E 0,31, FCF 70 Mrd. $, Bruttomarge 69%. Kann jedes Jahr mehrere große Übernahmen stemmen.", qu_t:"Satya Nadella transformierte Microsoft zur KI-Company Nr. 1. OpenAI-Partnership als strategischer Vorteil.", staerken:["Azure Cloud wächst 29% YoY","Copilot monetarisiert KI in 400 Mio. Office-Nutzern","FCF 70 Mrd. $ – Investitions-Powerhouse"], risiken:["OpenAI-Investment sehr teuer","Antitrust-Risiken EU und USA","Bewertung lässt wenig Spielraum"], fazit:"Microsoft ist das vollständigste Tech-Unternehmen: Cloud, KI, Office, Gaming. Buy-and-hold für Jahrzehnte." },
+  GOOGL:{ name:"Alphabet (Google)", sector:"Digital Ads / Cloud / AI", pe:19.8, ps:6.1, gm:57.0, rg:12, om:32.0, de:0.08, fcf:72.0, score:8, bw:8, wa:7, gs:10, qu:8, zusammenfassung:"Alphabet ist der günstigste der großen Tech-Werte. KGV unter 20 bei 12% Wachstum und 72 Mrd. FCF. Google Cloud wächst 28% – der Markt unterschätzt das.", bw_t:"KGV 19 ist für Google historisch günstig. Günstigster Mega-Cap im Vergleich zur Qualität.", wa_t:"12% Gesamtwachstum solide. Google Cloud +28% YoY. YouTube wächst. Search dominant trotz KI-Risiken.", gs_t:"D/E 0,08 – praktisch schuldenfrei. 108 Mrd. $ Cash. FCF 72 Mrd. $. Eine Festung.", qu_t:"Sundar Pichai solide CEO. Gemini KI holt auf. Antitrust-Risiko ist das größte qualitative Problem.", staerken:["KGV 19 – historisch günstig für Alphabet","Google Cloud +28% YoY und profitabel","108 Mrd. $ Cash – Acquisitions-Power"], risiken:["KI-Suche könnte Search-Umsatz kannibalisieren","Antitrust könnte Chrome/Android-Trennung erzwingen","Werbemarkt zyklisch"], fazit:"Alphabet ist fundamental der günstigste Qualitätswert unter den Mega-Caps. KGV unter 20 bei dieser Cash-Generierung ist historisch selten." },
+  CRM:  { name:"Salesforce", sector:"CRM / Enterprise SaaS", pe:27.0, ps:7.0, gm:77.0, rg:9, om:19.0, de:0.18, fcf:12.5, score:7, bw:7, wa:6, gs:8, qu:7, zusammenfassung:"Salesforce ist der CRM-Marktführer und wird durch Agentforce (KI-Agenten) neu bewertet. 9% Wachstum enttäuscht, aber Agentforce könnte die Wachstumsstory neu entfachen.", bw_t:"KGV 27 und KUV 7 sind für 9% Wachstum fair bis leicht teuer. Nicht günstig aber nicht teuer.", wa_t:"9% Umsatzwachstum moderat. Agentforce wächst rapide und könnte Wachstum auf 12-15% beschleunigen.", gs_t:"D/E 0,18, FCF 12,5 Mrd. $, Bruttomarge 77%. Sehr gesunde Bilanz.", qu_t:"Marc Benioff visionär aber polarisierend. Agentforce als KI-Plattform könnte nächster Wachstumshebel sein.", staerken:["CRM-Marktführer mit starkem Moat","Agentforce – KI-Agenten als Wachstumstreiber","FCF 12,5 Mrd. $ – solide Cash-Generierung"], risiken:["9% Wachstum enttäuscht den Markt","Microsoft Dynamics und ServiceNow als Konkurrenten","Übernahme-Historie hat Kapital vernichtet"], fazit:"Salesforce ist ein solider fairer Kauf. Agentforce könnte der Katalysator für Wachstumsbeschleunigung sein." },
+  SNOW: { name:"Snowflake", sector:"Cloud Data / Analytics SaaS", pe:null, ps:14.2, gm:67.0, rg:26, om:-4.0, de:0.02, fcf:0.8, score:6, bw:4, wa:8, gs:6, qu:7, zusammenfassung:"Snowflake wächst stark, aber ist noch nicht profitabel. KUV 14 ist für ein verlustbringendes Unternehmen riskant – man wettet auf zukünftige Profitabilität.", bw_t:"Kein KGV (Verluste). KUV 14 hoch. Man wettet auf zukünftige Profitabilität. Riskant.", wa_t:"26% Umsatzwachstum stark. Verbrauchsbasiertes Modell skaliert gut.", gs_t:"Fast schuldenfrei (D/E 0,02), aber FCF gering. Bruttomarge 67% gut.", qu_t:"Sridhar Ramaswamy als neuer CEO. Databricks-Konkurrenz wächst stark.", staerken:["26% Wachstum","Kaum Schulden","AI Data Cloud-Positionierung"], risiken:["Noch unprofitabel","Databricks als starker Konkurrent","Hohes KUV"], fazit:"Snowflake ist eine Wette auf Profitabilität. Nur für risikobewusste Investoren mit langem Zeithorizont." }
+};
+
+const TICKERS = Object.keys(ALL_DATA);
+let currentTicker = null;
+let currentTab = 'analyse';
+
+function scoreColor(s) {
+  return s >= 7 ? '#00e5a0' : s >= 5 ? '#f5c518' : '#ff4d6d';
+}
+
+function scoreBar(score) {
+  const color = scoreColor(score);
+  return `<div style="background:#1a1f2e;border-radius:4px;height:6px;width:100%;margin-top:8px;overflow:hidden">
+    <div class="score-bar-inner" style="width:${(score/10)*100}%;height:100%;background:${color};border-radius:4px"></div>
+  </div>`;
+}
+
+function renderChips() {
+  return TICKERS.map(t => `
+    <button class="chip" onclick="selectTicker('${t}')" style="background:${currentTicker===t?'#0f2a22':'#1a1f2e'};border-radius:20px;padding:5px 12px;font-size:12px;color:${currentTicker===t?'#00e5a0':'#6b7280'};font-weight:${currentTicker===t?'700':'400'}">${t}</button>
+  `).join('');
+}
+
+function renderAnalyse(d, ticker) {
+  const sc = scoreColor(d.score);
+  return `
+  <div class="fade-in">
+    <div style="background:linear-gradient(135deg,#0f2a22,#111827);border:1px solid #1e4d38;border-radius:16px;padding:22px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div style="flex:1;padding-right:16px">
+          <div style="font-size:21px;font-weight:800;letter-spacing:-0.5px">${d.name} <span style="color:#00e5a0;font-size:14px">${ticker}</span></div>
+          <div style="color:#6b7280;font-size:12px;margin-top:3px">${d.sector}</div>
+          <p style="color:#9ca3af;font-size:13px;line-height:1.7;margin-top:12px">${d.zusammenfassung}</p>
+        </div>
+        <div style="text-align:center;flex-shrink:0">
+          <div style="font-size:62px;font-weight:800;line-height:1;color:${sc}">${d.score}</div>
+          <div style="color:#6b7280;font-size:12px">/ 10</div>
+          ${d.score>=7?`<div style="margin-top:8px;background:#0f2a22;border:1px solid #00e5a0;border-radius:20px;padding:3px 10px;font-size:10px;color:#00e5a0;font-weight:700">★ WATCHLIST</div>`:''}
+        </div>
+      </div>
+    </div>
+
+    ${[['bw','bw_t','📊 Bewertung'],['wa','wa_t','📈 Wachstum'],['gs','gs_t','💪 Finanzgesundheit'],['qu','qu_t','🔍 Qualität & Moat']].map(([key,tkey,label]) => `
+      <div style="background:#111827;border:1px solid #1e2736;border-radius:12px;padding:16px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px;color:#9ca3af">${label}</span>
+          <span style="font-size:20px;font-weight:800;color:${scoreColor(d[key])}">${d[key]}<span style="font-size:11px;color:#6b7280;font-weight:400">/10</span></span>
+        </div>
+        ${scoreBar(d[key])}
+        <p style="font-size:12px;color:#6b7280;line-height:1.7;margin-top:10px">${d[tkey]}</p>
+      </div>
+    `).join('')}
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div style="background:#0a1f19;border:1px solid #1e4d38;border-radius:12px;padding:14px">
+        <div style="color:#00e5a0;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">✅ Stärken</div>
+        ${d.staerken.map(s=>`<div style="display:flex;gap:6px;margin-bottom:8px;font-size:12px;color:#9ca3af;line-height:1.5"><span style="color:#00e5a0;flex-shrink:0">→</span>${s}</div>`).join('')}
+      </div>
+      <div style="background:#1f0a0a;border:1px solid #4d1f1f;border-radius:12px;padding:14px">
+        <div style="color:#ff4d6d;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">⚠️ Risiken</div>
+        ${d.risiken.map(r=>`<div style="display:flex;gap:6px;margin-bottom:8px;font-size:12px;color:#9ca3af;line-height:1.5"><span style="color:#ff4d6d;flex-shrink:0">→</span>${r}</div>`).join('')}
+      </div>
+    </div>
+
+    <div style="background:#111827;border:1px solid #2d3748;border-radius:12px;padding:16px;margin-bottom:10px">
+      <div style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">📋 Gesamtfazit</div>
+      <p style="color:#9ca3af;line-height:1.8;font-size:13px">${d.fazit}</p>
+    </div>
+    <div style="font-size:10px;color:#374151;text-align:center;padding:4px 0 8px">⚠️ Keine Finanzberatung · Quellen: SEC Filings, StockAnalysis · Mai 2026</div>
+  </div>`;
+}
+
+function renderKennzahlen(d) {
+  const rows = [
+    ['KGV (P/E)', d.pe ? d.pe+'x' : 'n/a (Verlust)', 'Kurs / Gewinn je Aktie'],
+    ['KUV (P/S)', d.ps+'x', 'Kurs / Umsatz je Aktie'],
+    ['Umsatzwachstum', '+'+d.rg+'% YoY', 'Wachstum gegenüber Vorjahr'],
+    ['Bruttomarge', d.gm+'%', 'Umsatz minus direkte Kosten'],
+    ['Operating Margin', d.om+'%', 'Betriebsgewinnmarge'],
+    ['Debt / Equity', d.de+'x', 'Schulden / Eigenkapital'],
+    ['Free Cash Flow', d.fcf+' Mrd. $', 'Tatsächlich verdientes Geld'],
+  ];
+  return `<div class="fade-in">
+    ${rows.map(([label,wert,info])=>`
+      <div style="background:#111827;border:1px solid #1e2736;border-radius:10px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div>
+          <div style="font-size:13px;font-weight:600">${label}</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:3px">${info}</div>
+        </div>
+        <div style="font-size:15px;font-weight:700;color:#00e5a0">${wert}</div>
+      </div>
+    `).join('')}
+    <div style="font-size:10px;color:#374151;text-align:center;padding:8px 0">⚠️ Daten: Mai 2026 · Keine Finanzberatung</div>
+  </div>`;
+}
+
+function render() {
+  const d = currentTicker ? ALL_DATA[currentTicker] : null;
+  document.getElementById('app').innerHTML = `
+    <div style="margin-bottom:20px">
+      <div style="font-size:26px;font-weight:800;letter-spacing:-1px;color:#00e5a0">STOCK<span style="color:#e6edf3">LENS</span> <span style="font-size:11px;font-weight:400;color:#6b7280;letter-spacing:0">15 Unternehmen · Mai 2026</span></div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <input id="searchInput" type="text" placeholder="Ticker: NVDA, META, PLTR..." value="${currentTicker||''}"
+        style="flex:1;background:#111827;border:1px solid #1e2736;border-radius:10px;padding:12px 16px;color:#e6edf3;font-size:15px"
+        oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')doSearch()">
+      <button onclick="doSearch()" style="background:#00e5a0;border:none;border-radius:10px;padding:12px 18px;color:#0d1117;font-weight:700;font-size:16px;cursor:pointer">🔍</button>
+    </div>
+
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:14px">${renderChips()}</div>
+
+    ${d ? `
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button class="tab-btn" onclick="setTab('analyse')" style="flex:1;padding:10px;border-radius:8px;border:1px solid ${currentTab==='analyse'?'#00e5a0':'#1e2736'};background:${currentTab==='analyse'?'#0f2a22':'#111827'};color:${currentTab==='analyse'?'#00e5a0':'#6b7280'};font-weight:${currentTab==='analyse'?700:400};font-size:13px;cursor:pointer">📊 Analyse</button>
+        <button class="tab-btn" onclick="setTab('kennzahlen')" style="flex:1;padding:10px;border-radius:8px;border:1px solid ${currentTab==='kennzahlen'?'#00e5a0':'#1e2736'};background:${currentTab==='kennzahlen'?'#0f2a22':'#111827'};color:${currentTab==='kennzahlen'?'#00e5a0':'#6b7280'};font-weight:${currentTab==='kennzahlen'?700:400};font-size:13px;cursor:pointer">📋 Kennzahlen</button>
+      </div>
+      ${currentTab==='analyse' ? renderAnalyse(d, currentTicker) : renderKennzahlen(d)}
+    ` : `
+      <div style="text-align:center;padding:50px 20px">
+        <div style="font-size:44px;margin-bottom:12px">📊</div>
+        <div style="font-size:16px;color:#374151;font-weight:600">Unternehmen auswählen</div>
+        <div style="font-size:13px;color:#6b7280;margin-top:6px">Ticker eingeben oder oben antippen</div>
+      </div>
+    `}
+  `;
+}
+
+function selectTicker(t) {
+  currentTicker = t;
+  currentTab = 'analyse';
+  render();
+  window.scrollTo(0,0);
+}
+
+function doSearch() {
+  const val = document.getElementById('searchInput').value.trim().toUpperCase();
+  if (ALL_DATA[val]) { selectTicker(val); }
+  else { alert(val + ' nicht gefunden.\nVerfügbar: ' + TICKERS.join(', ')); }
+}
+
+function setTab(t) {
+  currentTab = t;
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
