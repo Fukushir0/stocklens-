@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Wolkenreich</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="pframe" class="panel">
+    <div class="pf-top"><span id="pname"></span><span id="plvl"></span></div>
+    <div class="bar hp"><i id="hpfill"></i><b id="hptxt"></b></div>
+    <div class="bar mp"><i id="mpfill"></i><b id="mptxt"></b></div>
+    <div id="buffs"></div>
+  </div>
+
+  <div id="tframe" class="panel hidden">
+    <div class="pf-top"><span id="tname"></span><span id="tlvl"></span></div>
+    <div class="bar hp"><i id="thpfill"></i><b id="thptxt"></b></div>
+  </div>
+
+  <div id="mapbox" class="panel">
+    <div id="zone">–</div>
+    <canvas id="minimap" width="160" height="160"></canvas>
+    <div id="gold">0 Taler</div>
+  </div>
+
+  <div id="log"></div>
+  <div id="labels"></div>
+  <div id="center"></div>
+
+  <div id="bottom">
+    <div id="hotbar"></div>
+    <div id="expbar"><i id="expfill"></i><b id="exptxt"></b></div>
+  </div>
+
+  <div id="menu">
+    <button data-win="winChar" title="Charakter (C)">👤</button>
+    <button data-win="winInv" title="Inventar (I)">🎒</button>
+    <button data-win="winQuest" title="Quests (L)">📜</button>
+    <button data-win="winHelp" title="Hilfe (H)">❔</button>
+  </div>
+
+  <div id="winChar" class="win panel hidden"><div class="wt">Charakter<span class="x">✕</span></div><div class="wb" id="charBody"></div></div>
+  <div id="winInv" class="win panel hidden"><div class="wt">Inventar<span class="x">✕</span></div><div class="wb" id="invBody"></div></div>
+  <div id="winQuest" class="win panel hidden"><div class="wt">Quests<span class="x">✕</span></div><div class="wb" id="questBody"></div></div>
+  <div id="winNpc" class="win panel hidden"><div class="wt"><span id="npcTitle"></span><span class="x">✕</span></div><div class="wb" id="npcBody"></div></div>
+  <div id="winHelp" class="win panel hidden"><div class="wt">Steuerung<span class="x">✕</span></div><div class="wb helpBody"></div></div>
+</div>
+
+<div id="tip" class="panel hidden"></div>
+
+<div id="start">
+  <div class="startbox panel">
+    <h1>Wolkenreich</h1>
+    <p class="sub">Ein Abenteuer zwischen Wiesen, Wäldern und Himmelsinseln</p>
+    <div id="newChar">
+      <label>Name deines Helden</label>
+      <input id="nameInput" maxlength="14" value="Wanderer" autocomplete="off">
+      <label>Haarfarbe</label>
+      <div id="hairs"></div>
+    </div>
+    <div class="startbtns">
+      <button id="btnContinue" class="big hidden">Fortsetzen</button>
+      <button id="btnNew" class="big">Neues Abenteuer</button>
+    </div>
+    <div class="helpBody small"></div>
+  </div>
+</div>
+
+<script src="three.min.js"></script>
+<script src="data.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
