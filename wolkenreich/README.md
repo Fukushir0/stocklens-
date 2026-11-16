@@ -27,6 +27,7 @@ Nach Änderungen am Code: `node build.js` erzeugt die Standalone-Datei neu.
 - Große Weltkarte (`M`) mit Gebieten, Stufenbereichen, Orten, Dungeon-Portalen und Questziel
 - Drei Dörfer (Luminhafen, Birkenau, Aschenfurt) und sechs Stationen mit Händlern; Wegsteine erlauben Schnellreisen zu besuchten Orten
 - Musik, die live im Browser erzeugt wird und je nach Ort wechselt (Dorf, Wildnis, Himmel, dunkle Gebiete und Dungeons, Bosskampf); Knopf 🎵 schaltet laut, leise, aus
+- Zusammen spielen über die veröffentlichte Seite: Wer sie gleichzeitig offen hat, sieht die anderen als Figuren in der Welt und kann chatten (`Enter`). Monster, Beute und Fortschritt bleiben pro Spieler getrennt; die Einzeldatei ist immer Einzelspieler
 - Fliegen mit Flugbrett, Minimap, automatisches Speichern (localStorage)
 
 ## Grafik

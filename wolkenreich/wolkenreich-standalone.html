@@ -141,6 +141,10 @@ button.big{font-size:18px;padding:11px 26px;font-weight:bold}
 
 #tip{z-index:99999}
 .wt{user-select:none}
+
+.plbl{color:#aaffb8;white-space:pre;text-align:center;font-size:13px;line-height:1.25}
+#netinfo{font-size:12px;margin-top:3px;color:#aaffb8}
+#chatIn{position:absolute;left:10px;bottom:64px;width:340px;max-width:70vw;font:inherit;font-size:14px;padding:7px 9px;border-radius:7px;border:1px solid #d9b765;background:rgba(10,15,34,.92);color:#fff;pointer-events:auto;user-select:text;-webkit-user-select:text}
 </style>
 </head>
 <body>
@@ -163,9 +167,11 @@ button.big{font-size:18px;padding:11px 26px;font-weight:bold}
     <div id="zone">–</div>
     <canvas id="minimap" width="160" height="160"></canvas>
     <div id="gold">0 Taler</div>
+    <div id="netinfo">👤 Einzelspieler</div>
   </div>
 
   <div id="log"></div>
+  <input id="chatIn" class="hidden" maxlength="80" placeholder="Nachricht schreiben, Enter zum Senden" autocomplete="off">
   <div id="labels"></div>
   <div id="center"></div>
 
@@ -1761,6 +1767,7 @@ Monster mit <b style="color:#ff6a5a">rotem Namen</b> greifen von selbst an. <b>K
 <kbd>2</kbd>–<kbd>8</kbd> Fertigkeiten · <kbd>9</kbd> Heiltrank · <kbd>0</kbd> Manatrank<br>
 <kbd>F</kbd> fliegen (Flugbrett nötig) – <kbd>Leertaste</kbd> steigen, <kbd>X</kbd> sinken<br>
 <kbd>C</kbd> Charakter · <kbd>I</kbd> Inventar · <kbd>L</kbd> Quests · <kbd>M</kbd> Karte · <kbd>H</kbd> Hilfe · <kbd>Esc</kbd> schließen<br>
+<b>Zusammen spielen:</b> Wer die Seite gleichzeitig offen hat, erscheint als Figur in der Welt (grüner Punkt auf der Karte); <kbd>Enter</kbd> öffnet den Chat.<br>
 <b>Klick auf Dorfbewohner</b> zum Reden. Die vier <b>Dungeon-Portale</b> stehen rund ums Dorf (hellblaue Punkte auf der Karte). <b>Wegsteine</b> in Dörfern und Stationen erlauben Schnellreisen zu besuchten Orten. Der Spielstand wird automatisch gespeichert.<br>
 <span class="gfxrow">Grafik: <button data-q="hoch">Hoch</button> <button data-q="mittel">Mittel</button> <button data-q="niedrig">Niedrig</button></span><br>
 <b>Fenster verschieben:</b> an der Titelleiste ziehen (Lebensanzeige, Ziel und Minikarte direkt anfassen). <button data-resetwin="1">Fenster zurücksetzen</button>`;
@@ -1956,12 +1963,54 @@ function updateNpcs(dt) {
 function npcMark(n) { if (n.id === 'mira') { const q = curQuest(); if (q && questDone()) return '?'; if (q && !p.q.on && p.lvl >= q.lvl) return '!'; } if (n.id === 'kaela' && ((p.cls === 'wanderer' && p.lvl >= 10) || (p.cls !== 'wanderer' && !p.spec && p.lvl >= 60))) return '!'; return ''; }
 
 /* ---------- Spieler ---------- */
+function heroModel(cls, spec, hair, wid, r, board) {
+  const w = wid && ITEMS[wid], sp = spec && SPECS[spec];
+  const m = GFX.human({ look: cls, hair, pal: sp ? sp.pal : null, aura: sp ? sp.pal.acc : 0, weapon: w && w.type === 'weapon' ? { wt: w.wt, cls: w.cls, id: w.id, tier: w.cls ? Math.min(3, +w.id.slice(-1) + 1) : 0, rar: r >= 2 && RAR[r] ? RAR[r].hex : 0 } : null });
+  m.setBoard(board); scene.add(m.g); return m;
+}
 function refreshModel() {
   if (p.model) scene.remove(p.model.g);
-  const w = p.equip.weapon && ITEMS[p.equip.weapon.id], r = p.equip.weapon ? p.equip.weapon.r || 0 : 0;
-  p.model = GFX.human({ look: p.cls, hair: p.hair, pal: p.spec ? SPECS[p.spec].pal : null, aura: p.spec ? SPECS[p.spec].pal.acc : 0, weapon: w ? { wt: w.wt, cls: w.cls, id: w.id, tier: w.cls ? Math.min(3, +w.id.slice(-1) + 1) : 0, rar: r >= 2 ? RAR[r].hex : 0 } : null });
-  p.model.setBoard(p.equip.board ? (p.equip.board.id === 'brett2' ? 2 : 1) : 0); scene.add(p.model.g);
+  p.model = heroModel(p.cls, p.spec, p.hair, p.equip.weapon && p.equip.weapon.id, p.equip.weapon ? p.equip.weapon.r || 0 : 0, p.equip.board ? (p.equip.board.id === 'brett2' ? 2 : 1) : 0);
 }
+
+/* ---------- Mehrspieler: andere Spieler, die die Seite gerade offen haben ---------- */
+// Jeder sendet nur seinen eigenen Zustand (Position, Aussehen). Alles Empfangene ist ungeprüft und wird nur angezeigt.
+const others = new Map(); let room = null, netT = 0, myMsg = null;
+const num = (v, a, b, d) => typeof v === 'number' && isFinite(v) ? clamp(v, a, b) : d;
+function dropOther(id) { const o = others.get(id); if (!o) return; scene.remove(o.model.g); o.lbl.remove(); others.delete(id); log(`${o.name} hat die Welt verlassen.`, 'e'); }
+function syncOther(pe) {
+  const s = pe.presence; if (!s || typeof s.x !== 'number' || !CLASSES[s.c]) return dropOther(pe.peer);
+  const name = String(s.n || 'Abenteurer').slice(0, 14), spec = SPECS[s.sp] && SPECS[s.sp].base === s.c ? s.sp : null, hair = num(s.h, 0, 0xffffff, HAIRS[0]), wid = ITEMS[s.w] && ITEMS[s.w].type === 'weapon' ? s.w : null, wr = num(s.wr, 0, 6, 0) | 0, bd = num(s.b, 0, 2, 0) | 0, key = [s.c, spec, hair, wid, wr, bd].join('|');
+  let o = others.get(pe.peer);
+  if (!o) { const lbl = document.createElement('div'); lbl.className = 'lbl plbl'; $('#labels').appendChild(lbl); o = { lbl, key: '', x: s.x, y: num(s.y, -50, 300, 2), z: num(s.z, -9999, 9999, 0), rot: 0, mt: num(s.mt, 0, 9e15, 0), say: '', sayT: 0 }; others.set(pe.peer, o); log(`${name} ist jetzt in der Welt. 👋`, 'g'); beep(660, 0.15, 'triangle', 0.04, 200); }
+  if (o.key !== key) { if (o.model) scene.remove(o.model.g); o.model = heroModel(s.c, spec, hair, wid, wr, bd); o.key = key; }
+  o.name = name; o.lvl = num(s.l, 1, MAXLVL, 1) | 0; o.cn = spec ? SPECS[spec].name : CLASSES[s.c].name; o.tx = num(s.x, -9999, 9999, 0); o.ty = num(s.y, -50, 300, 2); o.tz = num(s.z, -9999, 9999, 0); o.tr = num(s.r, -100, 100, 0); o.moving = !!s.m; o.flying = !!s.f; o.dun = typeof s.d === 'string' ? s.d : null; o.dead = !!s.k;
+  if (Math.hypot(o.tx - o.x, o.tz - o.z) > 60) { o.x = o.tx; o.y = o.ty; o.z = o.tz; }
+  const mt = num(s.mt, 0, 9e15, 0); if (mt > o.mt && typeof s.msg === 'string' && s.msg) { o.say = s.msg.slice(0, 80); o.sayT = 7; o.mt = mt; log(`${name}: ${o.say}`, 'p'); beep(880, 0.05, 'sine', 0.03); }
+}
+function updateOthers(dt) {
+  const myDun = p.dun ? p.dun.id : null;
+  for (const o of others.values()) {
+    const k = Math.min(1, dt * 9); o.x += (o.tx - o.x) * k; o.y += (o.ty - o.y) * k; o.z += (o.tz - o.z) * k; let dr = o.tr - o.rot; dr = Math.atan2(Math.sin(dr), Math.cos(dr)); o.rot += dr * k; if (o.sayT > 0) o.sayT -= dt;
+    const vis = started && o.dun === myDun; o.model.g.visible = vis; o.model.g.position.set(o.x, o.y, o.z); o.model.g.rotation.y = o.rot; if (vis) o.model.update(dt, { moving: o.moving, flying: o.flying, dead: o.dead });
+    const sc = vis && Math.hypot(o.x - p.x, o.z - p.z) < 130 ? toScreen(o.x, o.y + 4.1, o.z) : null;
+    if (sc) { const tx = `${o.name} · St. ${o.lvl}\n${o.cn}${o.sayT > 0 ? '\n💬 ' + o.say : ''}`; if (o.ltx !== tx) { o.ltx = tx; o.lbl.textContent = tx; } o.lbl.style.display = ''; o.lbl.style.left = sc.x + 'px'; o.lbl.style.top = sc.y + 'px'; } else o.lbl.style.display = 'none';
+  }
+  if (!room || !started) return; netT -= dt; if (netT > 0) return; netT = 0.1;
+  const r2 = v => Math.round(v * 100) / 100, st = { n: p.name, c: p.cls, sp: p.spec, h: p.hair, l: p.lvl, x: r2(p.x), y: r2(p.y), z: r2(p.z), r: r2(p.rot), m: p.model.run > 0.3 ? 1 : 0, f: p.flying ? 1 : 0, k: p.dead ? 1 : 0, d: p.dun ? p.dun.id : null, w: p.equip.weapon ? p.equip.weapon.id : null, wr: p.equip.weapon ? p.equip.weapon.r || 0 : 0, b: p.equip.board ? (p.equip.board.id === 'brett2' ? 2 : 1) : 0 };
+  if (myMsg) { st.msg = myMsg[0]; st.mt = myMsg[1]; } room.presence(st).catch(() => {});
+}
+async function initNet() {
+  try { room = window.claude && window.claude.use ? await window.claude.use('room') : null; } catch (e) { room = null; }
+  const el = $('#netinfo'); if (!room) { el.textContent = '👤 Einzelspieler'; el.title = 'Zusammen spielen geht nur über den geteilten Link, wenn dein Mitspieler angemeldet und eingeladen ist.'; return; }
+  const off = () => { room = null; for (const id of [...others.keys()]) dropOther(id); el.textContent = '👤 Einzelspieler'; };
+  room.onPeers(ch => { for (const pe of ch.left) dropOther(pe.peer); for (const pe of ch.peers) if (!pe.sameTab && pe.kind === 'viewer') syncOther(pe); el.textContent = `👥 ${others.size + 1} online`; el.title = 'Spieler, die die Seite gerade offen haben. Enter = Chat.'; }, off);
+  el.textContent = '👥 1 online';
+}
+initNet();
+function sendChat(t) { t = [...t].filter(ch => { const c = ch.codePointAt(0); return c >= 32 && !(c >= 127 && c <= 159) && !(c >= 0x200b && c <= 0x200f) && !(c >= 0x2028 && c <= 0x202f) && !(c >= 0x2060 && c <= 0x206f) && c !== 0xfeff; }).join('').trim().slice(0, 80); if (!t) return; log(`${p.name}: ${t}`, 'p'); if (room) myMsg = [t, Date.now()]; else log('(Niemand sonst ist verbunden.)', 'e'); }
+const chatIn = $('#chatIn');
+chatIn.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') { sendChat(chatIn.value); chatIn.value = ''; chatIn.classList.add('hidden'); chatIn.blur(); } else if (e.key === 'Escape') { chatIn.value = ''; chatIn.classList.add('hidden'); chatIn.blur(); } });
 const selRing = GFX.selection();
 function updatePlayer(dt) {
   for (const k in p.cds) if (p.cds[k] > 0) p.cds[k] -= dt;
@@ -2074,6 +2123,7 @@ function drawMap() {
   if (!p.dun) { circ(0, 0, 34, 'rgba(230,205,150,.9)'); for (const pl of PLACES) if (pl.id !== 'luminhafen') circ(pl.x, pl.z, pl.type === 'dorf' ? 16 : 8, 'rgba(230,205,150,.9)'); for (const i of ISLANDS) circ(i.x, i.z, i.r, 'rgba(200,235,255,.75)'); }
   for (const n of portals) { const q = P(n.x, n.z); c.fillStyle = '#7ff0ff'; c.beginPath(); c.arc(q[0], q[1], 3.5, 0, 7); c.fill(); }
   for (const m of mobs) { if (m.dead) continue; const q = P(m.x, m.z); if (Math.abs(q[0] - 80) > 82 || Math.abs(q[1] - 80) > 82) continue; c.fillStyle = m === p.target ? '#fff' : m.def.boss ? '#ff3ad6' : m.def.aggro ? '#ff4a4a' : '#ffb04a'; c.fillRect(q[0] - 1.5, q[1] - 1.5, m.def.boss ? 6 : 3, m.def.boss ? 6 : 3); }
+  for (const o of others.values()) if (o.dun === (p.dun ? p.dun.id : null)) { const q = P(o.x, o.z); c.fillStyle = '#5aff7a'; c.strokeStyle = '#000'; c.beginPath(); c.arc(q[0], q[1], 4, 0, 7); c.fill(); c.stroke(); }
   for (const n of npcs) { const q = P(n.x, n.z); c.fillStyle = '#ffe04a'; c.beginPath(); c.arc(q[0], q[1], 3, 0, 7); c.fill(); }
   // Richtung zum Dorf, wenn außerhalb
   const d0 = Math.hypot(p.x, p.z); if (d0 > R && !p.dun) { const a = Math.atan2(-p.z, -p.x); c.fillStyle = '#ffe04a'; c.beginPath(); c.arc(80 + Math.cos(a) * 72, 80 + Math.sin(a) * 72, 4, 0, 7); c.fill(); }
@@ -2107,6 +2157,7 @@ function drawBigMap() {
   if (qa) { const q = M(qa.x, qa.z); c.strokeStyle = `rgba(255,224,74,${0.5 + pulse * 0.5})`; c.lineWidth = 3; c.beginPath(); c.arc(q[0], q[1], qa.r * sc + 4 + pulse * 4, 0, 7); c.stroke(); label('❗ Questziel', q[0], q[1] + qa.r * sc + 16, '#ffe04a'); }
   for (const n of portals) if (n.enter) { const q = M(n.x, n.z); c.fillStyle = '#7ff0ff'; c.strokeStyle = '#000'; c.lineWidth = 1; c.beginPath(); c.arc(q[0], q[1], 4, 0, 7); c.fill(); c.stroke(); }
   for (const pl of PLACES) { const q = M(pl.x, pl.z), known = p.wp.includes(pl.id); c.font = pl.type === 'dorf' ? '20px sans-serif' : '15px sans-serif'; c.globalAlpha = known ? 1 : 0.55; c.fillText(pl.type === 'dorf' ? '🏠' : '⛺', q[0], q[1] + 6); c.globalAlpha = 1; label(known ? pl.name : '? ' + pl.name, q[0], q[1] + (pl.type === 'dorf' ? 22 : 19), known ? '#fff' : '#c8c8c8', pl.type === 'dorf' ? 'bold 12px sans-serif' : '11px sans-serif'); }
+  for (const o of others.values()) if (!o.dun) { const u = M(clamp(o.x, -455, 455), clamp(o.z, -455, 455)); c.fillStyle = '#5aff7a'; c.strokeStyle = '#000'; c.lineWidth = 1.5; c.beginPath(); c.arc(u[0], u[1], 6, 0, 7); c.fill(); c.stroke(); label(o.name, u[0], u[1] - 9, '#aaffb8', 'bold 11px sans-serif'); }
   const q = M(clamp(p.x, -455, 455), clamp(p.z, -455, 455)); c.strokeStyle = `rgba(255,255,255,${1 - pulse * 0.6})`; c.lineWidth = 2; c.beginPath(); c.arc(q[0], q[1], 9 + pulse * 6, 0, 7); c.stroke();
   c.save(); c.translate(q[0], q[1]); c.rotate(-p.rot + Math.PI); c.fillStyle = '#ff3a3a'; c.strokeStyle = '#fff'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(0, -10); c.lineTo(7, 8); c.lineTo(0, 4); c.lineTo(-7, 8); c.closePath(); c.fill(); c.stroke(); c.restore();
   label('N', 300, 16, '#fff', 'bold 14px sans-serif'); c.textAlign = 'left';
@@ -2136,6 +2187,7 @@ function clickWorld(cx, cy) {
 window.addEventListener('keydown', e => {
   if (!started || e.target.tagName === 'INPUT') return; const k = e.key.toLowerCase(); keys[k] = true;
   if (e.repeat) { if (k === ' ' || k === 'tab') e.preventDefault(); return; }
+  if (k === 'enter') { keys[k] = false; chatIn.classList.remove('hidden'); chatIn.focus(); e.preventDefault(); return; }
   if (k >= '0' && k <= '9') { const s = slots.find(q => q.key === k); if (s) s.act(); }
   else if (k === 'tab') { e.preventDefault(); setTarget(nearestMob(45, p.target) || p.target); }
   else if (k === 'f') toggleFly(); else if (k === 'c') toggleWin('winChar'); else if (k === 'i' || k === 'b') toggleWin('winInv'); else if (k === 'l' || k === 'q') toggleWin('winQuest'); else if (k === 'h') toggleWin('winHelp'); else if (k === 'm') toggleWin('winMap');
@@ -2182,7 +2234,7 @@ function frame() {
     updatePlayer(dt); for (const m of mobs) updateMob(m, dt); updateLoot(dt); updateProj(dt);
     tx = p.x; ty = p.y + 2.5; tz = p.z;
   } else { cam.yaw = time * 0.07 + 0.6; cam.pitch = 0.22; cam.dist = 62; }
-  updateNpcs(dt);
+  updateNpcs(dt); updateOthers(dt);
   const cp = Math.cos(cam.pitch); camDir.set(Math.sin(cam.yaw) * cp, Math.sin(cam.pitch), Math.cos(cam.yaw) * cp); camFrom.set(tx, ty, tz); camRay.set(camFrom, camDir); camRay.far = cam.dist;
   const blk = camRay.intersectObjects(GFX.blockers, false)[0], want = blk ? Math.max(2.2, blk.distance - 0.7) : cam.dist; camCur = want < camCur ? want : camCur + (want - camCur) * Math.min(1, dt * 5);
   let cx = tx + camDir.x * camCur, cy = ty + camDir.y * camCur, cz = tz + camDir.z * camCur;

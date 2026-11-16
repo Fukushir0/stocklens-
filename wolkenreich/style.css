@@ -134,3 +134,7 @@ button.big{font-size:18px;padding:11px 26px;font-weight:bold}
 
 #tip{z-index:99999}
 .wt{user-select:none}
+
+.plbl{color:#aaffb8;white-space:pre;text-align:center;font-size:13px;line-height:1.25}
+#netinfo{font-size:12px;margin-top:3px;color:#aaffb8}
+#chatIn{position:absolute;left:10px;bottom:64px;width:340px;max-width:70vw;font:inherit;font-size:14px;padding:7px 9px;border-radius:7px;border:1px solid #d9b765;background:rgba(10,15,34,.92);color:#fff;pointer-events:auto;user-select:text;-webkit-user-select:text}
