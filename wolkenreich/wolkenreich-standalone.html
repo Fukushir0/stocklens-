@@ -145,6 +145,14 @@ button.big{font-size:18px;padding:11px 26px;font-weight:bold}
 .plbl{color:#aaffb8;white-space:pre;text-align:center;font-size:13px;line-height:1.25}
 #netinfo{font-size:12px;margin-top:3px;color:#aaffb8}
 #chatIn{position:absolute;left:10px;bottom:64px;width:340px;max-width:70vw;font:inherit;font-size:14px;padding:7px 9px;border-radius:7px;border:1px solid #d9b765;background:rgba(10,15,34,.92);color:#fff;pointer-events:auto;user-select:text;-webkit-user-select:text}
+
+#winFriends{left:50%;top:120px;margin-left:-180px;width:360px}
+#party{position:absolute;left:10px;top:118px;width:210px;padding:7px 9px}
+#party .pm{margin-top:5px;font-size:12px}#party .pm small{color:#bcd}#party .bar{height:8px;margin-top:2px}
+#party button{padding:1px 7px;font-size:11px}
+#ask{position:absolute;left:50%;top:92px;transform:translateX(-50%);padding:12px 16px;z-index:9000;text-align:center;font-size:14px;pointer-events:auto}
+#ask .npcbtns{justify-content:center}
+.dmg.ally{color:#8fd8ff;font-size:16px}
 </style>
 </head>
 <body>
@@ -185,6 +193,7 @@ button.big{font-size:18px;padding:11px 26px;font-weight:bold}
     <button data-win="winInv" title="Inventar (I)">🎒</button>
     <button data-win="winQuest" title="Quests (L)">📜</button>
     <button id="btnMusic" title="Musik: laut / leise / aus">🎵</button>
+    <button data-win="winFriends" title="Freunde (O)">👥</button>
     <button data-win="winMap" title="Karte (M)">🗺️</button>
     <button data-win="winHelp" title="Hilfe (H)">❔</button>
   </div>
@@ -193,6 +202,9 @@ button.big{font-size:18px;padding:11px 26px;font-weight:bold}
   <div id="winInv" class="win panel hidden"><div class="wt">Inventar<span class="x">✕</span></div><div class="wb" id="invBody"></div></div>
   <div id="winQuest" class="win panel hidden"><div class="wt">Quests<span class="x">✕</span></div><div class="wb" id="questBody"></div></div>
   <div id="winNpc" class="win panel hidden"><div class="wt"><span id="npcTitle"></span><span class="x">✕</span></div><div class="wb" id="npcBody"></div></div>
+  <div id="winFriends" class="win panel hidden"><div class="wt">Freunde<span class="x">✕</span></div><div class="wb" id="friendBody"></div></div>
+  <div id="party" class="panel hidden"></div>
+  <div id="ask" class="panel hidden"><div id="askText"></div><div class="npcbtns"><button id="askYes">Annehmen</button><button id="askNo">Ablehnen</button></div></div>
   <div id="winMap" class="win panel hidden"><div class="wt">Weltkarte<span class="x">✕</span></div><div class="wb"><canvas id="bigmap" width="600" height="600"></canvas><div class="muted maplegend">🔺 du · 🏠 Dorf · ⛺ Station (? = noch nicht entdeckt) · <span style="color:#7ff0ff">●</span> Dungeon-Portal · ☁ Himmelsinsel (nur per Flug) · gelber Ring = Questziel. Reisen: Wegstein anklicken.</div></div></div>
   <div id="winHelp" class="win panel hidden"><div class="wt">Steuerung<span class="x">✕</span></div><div class="wb helpBody"></div></div>
 </div>
@@ -1679,6 +1691,7 @@ function usePortal(q) {
   p.vy = 0; p.moveTo = null; p.attacking = false; setTarget(null); ring(p.x, p.y, p.z, 0x9ff0ff, 6); beep(520, 0.4, 'sine', 0.06, 400); zoneName = ''; hudT = 0; save();
 }
 function openNpc(n) {
+  if (n.player) return others.has(n.id) ? openPlayer(n) : showWin('winNpc', false);
   if (n.portal) return usePortal(n);
   const K = n.kind || n.id; curNpc = n; shopOpen = K === 'tessa' || K === 'ivo'; $('#npcTitle').textContent = `${n.name} – ${n.role}`; let h = '';
   if (K === 'mira') {
@@ -1751,11 +1764,11 @@ function makeDraggable(el, handle) {
   });
 }
 document.querySelectorAll('.win').forEach(w => makeDraggable(w, w.querySelector('.wt')));
-for (const id of ['pframe', 'tframe', 'mapbox']) makeDraggable($('#' + id), $('#' + id));
+for (const id of ['pframe', 'tframe', 'mapbox', 'party']) makeDraggable($('#' + id), $('#' + id));
 const restoreWins = () => { for (const id in winPos) { const el = $('#' + id); if (el && !el.classList.contains('hidden')) placeWin(el, winPos[id][0], winPos[id][1]); } };
 window.addEventListener('resize', restoreWins);
 function resetWins() { winPos = {}; try { localStorage.removeItem(WINPOS_KEY); } catch (e) { /* egal */ } document.querySelectorAll('.win, #pframe, #tframe, #mapbox').forEach(el => { for (const k of ['left', 'top', 'right', 'bottom', 'margin', 'transform']) el.style.removeProperty(k); }); log('Alle Fenster stehen wieder am ursprünglichen Platz.', 'e'); }
-function showWin(id, on) { const w = $('#' + id); w.classList.toggle('hidden', !on); if (on) { w.style.zIndex = ++zTop; if (winPos[id]) placeWin(w, winPos[id][0], winPos[id][1]); } if (!on && id === 'winNpc') { curNpc = null; shopOpen = false; renderInv(); } if (on) { renderChar(); renderInv(); renderQuests(); } }
+function showWin(id, on) { const w = $('#' + id); w.classList.toggle('hidden', !on); if (on) { w.style.zIndex = ++zTop; if (winPos[id]) placeWin(w, winPos[id][0], winPos[id][1]); } if (!on && id === 'winNpc') { curNpc = null; shopOpen = false; renderInv(); } if (on) { renderChar(); renderInv(); renderQuests(); renderFriends(); } }
 const toggleWin = id => showWin(id, $('#' + id).classList.contains('hidden'));
 document.querySelectorAll('.win .x').forEach(x => x.addEventListener('click', () => showWin(x.closest('.win').id, false)));
 document.querySelectorAll('#menu button[data-win]').forEach(b => b.addEventListener('click', () => toggleWin(b.dataset.win)));
@@ -1767,7 +1780,7 @@ Monster mit <b style="color:#ff6a5a">rotem Namen</b> greifen von selbst an. <b>K
 <kbd>2</kbd>–<kbd>8</kbd> Fertigkeiten · <kbd>9</kbd> Heiltrank · <kbd>0</kbd> Manatrank<br>
 <kbd>F</kbd> fliegen (Flugbrett nötig) – <kbd>Leertaste</kbd> steigen, <kbd>X</kbd> sinken<br>
 <kbd>C</kbd> Charakter · <kbd>I</kbd> Inventar · <kbd>L</kbd> Quests · <kbd>M</kbd> Karte · <kbd>H</kbd> Hilfe · <kbd>Esc</kbd> schließen<br>
-<b>Zusammen spielen:</b> Wer die Seite gleichzeitig offen hat, erscheint als Figur in der Welt (grüner Punkt auf der Karte); <kbd>Enter</kbd> öffnet den Chat.<br>
+<b>Zusammen spielen:</b> Wer die Seite gleichzeitig offen hat, erscheint als Figur in der Welt (grüner Punkt auf der Karte); <kbd>Enter</kbd> öffnet den Chat. <b>Klick auf einen Spieler</b>: in die Gruppe einladen (Erfahrung, Taler und Beute werden geteilt) oder Freundschaftsanfrage. <kbd>O</kbd> Freundesliste.<br>
 <b>Klick auf Dorfbewohner</b> zum Reden. Die vier <b>Dungeon-Portale</b> stehen rund ums Dorf (hellblaue Punkte auf der Karte). <b>Wegsteine</b> in Dörfern und Stationen erlauben Schnellreisen zu besuchten Orten. Der Spielstand wird automatisch gespeichert.<br>
 <span class="gfxrow">Grafik: <button data-q="hoch">Hoch</button> <button data-q="mittel">Mittel</button> <button data-q="niedrig">Niedrig</button></span><br>
 <b>Fenster verschieben:</b> an der Titelleiste ziehen (Lebensanzeige, Ziel und Minikarte direkt anfassen). <button data-resetwin="1">Fenster zurücksetzen</button>`;
@@ -1807,11 +1820,12 @@ function shoot(target, color, onHit, kind) { const m = GFX.projectile(kind, colo
 const mobCenterY = m => m.y + (FLOATERS[m.def.model] ? 1.2 : 0) + 1.1 * m.def.scale;
 function calcDmg(mult, m) { let d = atkPower() * mult * rnd(0.9, 1.1); const crit = Math.random() < critChance(); if (crit) d *= 1.6; return { d: Math.max(1, Math.round(d - m.def.def * 0.5)), crit }; }
 function hitMob(m, mult, o = {}) {
-  if (m.dead) return; const r = calcDmg(mult, m); m.hp -= r.d; m.hitT = 0.15; p.combatT = 6;
+  if (m.dead) return; const r = calcDmg(mult, m), rem = remoteActive(m); if (!rem) m.hp -= r.d; m.hitT = 0.15; p.combatT = 6; if (room) sendEv('h', m.idx, r.d);
   floatText(r.d + (r.crit ? '!' : ''), m.x, mobCenterY(m) + 1.2 * m.def.scale, m.z, r.crit ? 'crit' : ''); fx.hit(m.x, mobCenterY(m), m.z, o.color || 0xffffff, Math.min(2.2, m.def.scale));
   beep(r.crit ? 320 : 220, 0.06, 'square', 0.035, -90);
   const lc = wBonus('leech', 0); if (lc && !p.dead) p.hp = Math.min(maxHP(), p.hp + r.d * lc);
   if (o.stun) m.stun = o.stun; if (o.slow) m.slow = o.slow;
+  if (rem) return;
   if (m.state !== 'chase') m.state = 'chase';
   if (m.hp <= 0) killMob(m);
 }
@@ -1837,7 +1851,7 @@ function castSkill(k, fromQueue) {
     if (Math.hypot(t.x - p.x, t.z - p.z) > cls().range + t.def.scale * 0.8) { if (!fromQueue) { p.queued = k; p.attacking = true; p.moveTo = null; } return; }
     p.rot = Math.atan2(t.x - p.x, t.z - p.z);
   }
-  p.mp -= s.mp; p.cds[k] = s.cd; p.atkT = Math.max(p.atkT, 0.6); beep(440, 0.14, 'sawtooth', 0.04, 300); p.model.play(s.fx === 'spin' ? 'spin' : 'skill');
+  p.mp -= s.mp; p.cds[k] = s.cd; p.atkT = Math.max(p.atkT, 0.6); beep(440, 0.14, 'sawtooth', 0.04, 300); p.model.play(s.fx === 'spin' ? 'spin' : 'skill'); atkCount++;
   const t = p.target, col = s.col || s.proj || (s.slow ? 0x9fe8ff : 0xffb04a);
   const strike = (m, o) => { if (s.leech) { const h = Math.round(maxHP() * s.leech); p.hp = Math.min(maxHP(), p.hp + h); floatText('+' + h, p.x, p.y + 3.4, p.z, 'heal'); } hitMob(m, s.mult, o); };
   if (s.type === 'dmg') {
@@ -1865,21 +1879,24 @@ function gainExp(n) {
   if (up) { p.hp = maxHP(); p.mp = maxMP(); levelFx(); center(`Stufe ${p.lvl}!`, '+3 Attributpunkte (C)'); log(`Stufenaufstieg! Du bist jetzt Stufe ${p.lvl}.`, 'g'); if (p.lvl === 10 && p.cls === 'wanderer') log('Meisterin Kaela im Dorf kann dir jetzt eine Klasse geben!', 'g'); if (p.lvl >= 60 && !p.spec && p.cls !== 'wanderer') log('Stufe 60! Meisterin Kaela bietet dir eine zweite Klassenstufe an.', 'g'); buildHotbar(); renderChar(); renderQuests(); save(); }
 }
 function killMob(m) {
-  m.dead = true; m.g.visible = false; m.respawn = m.def.boss ? 150 : m.def.elite ? rnd(160, 200) : rnd(9, 14); if (p.target === m) setTarget(null);
+  if (m.dead) return; m.dead = true; m.remote = null; m.g.visible = false; m.respawn = m.def.boss ? 150 : m.def.elite ? rnd(160, 200) : rnd(9, 14); if (p.target === m) setTarget(null);
   fx.kill(m.x, mobCenterY(m), m.z, m.def.color, Math.min(2.6, m.def.scale)); beep(140, 0.18, 'sawtooth', 0.05, -80);
-  const diff = p.lvl - m.def.lvl; gainExp(Math.max(1, Math.round(m.def.exp * clamp(1 - (diff - 3) * 0.15, 0.1, 1))));
-  dropLoot(m, { gold: rint(m.def.gold[0], m.def.gold[1]) });
-  if (Math.random() < (m.def.boss ? 1 : 0.45)) dropLoot(m, { item: m.def.drop });
-  if (Math.random() < (m.def.boss ? 1 : (0.04 + m.def.lvl * 0.002) * (m.def.elite ? 2.5 : 1))) dropLoot(m, { item: 'splitter', n: m.def.boss ? 4 : 1 });
-  if (Math.random() < (m.def.boss ? 1 : (0.012 + m.def.lvl * 0.0008) * (m.def.elite ? 3 : 1))) dropLoot(m, { item: 'rolle', n: m.def.boss ? 2 : 1 });
-  if (Math.random() < 0.08) dropLoot(m, { item: m.def.lvl >= 70 ? 'hp4' : m.def.lvl >= 40 ? 'hp3' : m.def.lvl >= 15 ? 'hp2' : 'hp1' });
-  for (let i = 0, n = m.def.boss ? 3 : Math.random() < (m.def.elite ? 0.16 : 0.07) ? 1 : 0; i < n; i++) { const id = gearFor(GEAR[Math.floor(Math.random() * GEAR.length)], m.def.lvl + 2); if (id) dropLoot(m, { item: id, r: m.def.boss ? rollRarity(true) : Math.max(m.def.elite && Math.random() < 0.4 ? 1 : 0, rollRarity(false)) }); }
+  // Gruppe: Erfahrung mit Bonus, Taler zu gleichen Teilen, jede Beute per Los an ein Mitglied in der Nähe
+  const team = partyNear(), nT = team.length + 1, shared = []; let goldEach = 0;
+  const give = o => { const k = Math.floor(Math.random() * nT); if (k === 0) return dropLoot(m, o); const it = ITEMS[o.item]; shared.push([team[k - 1].uid, it.fr ? (it.fr === 5 ? '@l' : '@b') : isGear(o.item) ? '@' + it.type : o.item, o.r === undefined ? -1 : o.r, o.n || 1, it.lvl || 1]); log(`Gruppenbeute für ${team[k - 1].name}: ${ITEMS[o.item].name}`, 'e'); };
+  const diff = p.lvl - m.def.lvl, xpBase = Math.max(1, Math.round(m.def.exp * clamp(1 - (diff - 3) * 0.15, 0.1, 1))), xpEach = nT > 1 ? Math.round(xpBase * (1 + 0.3 * (nT - 1)) / nT) : xpBase; gainExp(xpEach);
+  { const g = rint(m.def.gold[0], m.def.gold[1]); goldEach = nT > 1 ? Math.ceil(g / nT) : 0; dropLoot(m, { gold: nT > 1 ? goldEach : g }); }
+  if (Math.random() < (m.def.boss ? 1 : 0.45)) give({ item: m.def.drop });
+  if (Math.random() < (m.def.boss ? 1 : (0.04 + m.def.lvl * 0.002) * (m.def.elite ? 2.5 : 1))) give({ item: 'splitter', n: m.def.boss ? 4 : 1 });
+  if (Math.random() < (m.def.boss ? 1 : (0.012 + m.def.lvl * 0.0008) * (m.def.elite ? 3 : 1))) give({ item: 'rolle', n: m.def.boss ? 2 : 1 });
+  if (Math.random() < 0.08) give({ item: m.def.lvl >= 70 ? 'hp4' : m.def.lvl >= 40 ? 'hp3' : m.def.lvl >= 15 ? 'hp2' : 'hp1' });
+  for (let i = 0, n = m.def.boss ? 3 : Math.random() < (m.def.elite ? 0.16 : 0.07) ? 1 : 0; i < n; i++) { const id = gearFor(GEAR[Math.floor(Math.random() * GEAR.length)], m.def.lvl + 2); if (id) give({ item: id, r: m.def.boss ? rollRarity(true) : Math.max(m.def.elite && Math.random() < 0.4 ? 1 : 0, rollRarity(false)) }); }
   // Accessoires: nur von Dungeon-Monstern und Bossen
-  if (p.cls !== 'wanderer' && (m.def.boss || (m.def.elite && Math.random() < 0.08 * (WRGAME.luck || 1)))) for (let i = 0, n = m.def.boss ? 2 : 1; i < n; i++) { const tier = [80, 60, 40, 20].findIndex(L => L <= m.def.lvl), id = tier < 0 ? null : 'x_' + 'rena'[Math.floor(Math.random() * 4)] + '_' + p.cls + (3 - tier); if (id && ITEMS[id]) dropLoot(m, { item: id, r: rollRarity(m.def.boss) }); }
+  if (p.cls !== 'wanderer' && (m.def.boss || (m.def.elite && Math.random() < 0.08 * (WRGAME.luck || 1)))) for (let i = 0, n = m.def.boss ? 2 : 1; i < n; i++) { const tier = [80, 60, 40, 20].findIndex(L => L <= m.def.lvl), id = tier < 0 ? null : 'x_' + 'rena'[Math.floor(Math.random() * 4)] + '_' + p.cls + (3 - tier); if (id && ITEMS[id]) give({ item: id, r: rollRarity(m.def.boss) }); }
   // Legendäre (Boss ab Stufe 60) und blutige Waffen (Boss ab Stufe 80): extrem selten
   if (m.def.boss && p.cls !== 'wanderer') { const special = pre => { let best = null; for (const id in ITEMS) { const it = ITEMS[id]; if (id.startsWith(pre + p.cls) && it.lvl <= m.def.lvl && (!best || it.lvl > ITEMS[best].lvl)) best = id; } return best; };
-    const q = Math.random() / (WRGAME.luck || 1), id = m.def.lvl >= 80 && q < 0.025 ? special('b_') : m.def.lvl >= 60 && q < 0.075 ? special('l_') : null; if (id) dropLoot(m, { item: id, r: ITEMS[id].fr }); }
-  const q = curQuest(); if (q && p.q.on && q.kill === m.def.id && p.q.prog < q.n) { p.q.prog++; log(`${q.name}: ${p.q.prog} / ${q.n}`, 'e'); if (p.q.prog >= q.n) { log('Quest erfüllt! Kehre zu Mira zurück.', 'g'); beep(784, 0.2, 'triangle', 0.05); } renderQuests(); }
+    const q = Math.random() / (WRGAME.luck || 1), id = m.def.lvl >= 80 && q < 0.025 ? special('b_') : m.def.lvl >= 60 && q < 0.075 ? special('l_') : null; if (id) give({ item: id, r: ITEMS[id].fr }); }
+  questKill(m.def.id); if (room) sendEv('k', m.idx, nT > 1 ? xpEach : 0, goldEach, party, shared.slice(0, 8));
   if (m.def.boss) center(m.def.name + ' bezwungen!', m.def.id === 'koloss' ? 'Die Himmelsinseln sind frei.' : p.dun ? 'Das Portal hinter dem Thron führt zurück.' : 'Du bist die Legende von Wolkenreich.');
 }
 function dropLoot(m, o) {
@@ -1909,7 +1926,7 @@ function spawnMob(id, home) {
   const def = MOBS[id], g = new THREE.Group(), vis = GFX.mob(def); g.add(vis.g);
   const pick = addPick(g, 1.5, 3.2, 3.8, null, 'mob'); g.scale.setScalar(def.scale); scene.add(g);
   const m = { def, g, vis, pick, home, x: 0, y: 0, z: 0, rot: rnd(0, 6.28), hp: def.hp, state: 'idle', atkT: 0, wanderT: rnd(0, 4), tx: 0, tz: 0, dead: false, respawn: 0, stun: 0, slow: 0, hitT: 0, lunge: 0, animT: rnd(0, 10), moving: false };
-  pick.userData.ent = m; pick.userData.kind = 'mob'; placeMob(m); mobs.push(m); return m;
+  pick.userData.ent = m; pick.userData.kind = 'mob'; m.idx = mobs.length; placeMob(m); mobs.push(m); return m;
 }
 function randomSpot(home) {
   for (let i = 0; i < 30; i++) { const a = rnd(0, 6.28), r = Math.sqrt(Math.random()) * (home.r - (home.isl ? 6 : 0)), x = home.x + Math.cos(a) * r, z = home.z + Math.sin(a) * r; if (home.isl || terrainH(x, z) > -1.5) return { x, z }; }
@@ -1927,7 +1944,9 @@ function updateMob(m, dt) {
   const dx = p.x - m.x, dz = p.z - m.z, d = Math.hypot(dx, dz); m.g.visible = d < 240; m.moving = false; if (d > 190 && m.state === 'idle') return;
   m.animT += dt;
   const reachable = !p.dead && Math.abs(p.y - m.y) < 6, dn = m.home.dun, spd = m.def.speed * (dn ? 1.35 : 1) * (m.slow > 0 ? 0.45 : 1); if (m.slow > 0) m.slow -= dt;
-  if (m.stun > 0) m.stun -= dt;
+  if (m.remote && !remoteActive(m)) { m.remote = null; if (m.state !== 'chase') m.state = 'return'; }
+  if (m.remote) { const r = m.remote, k = Math.min(1, dt * 8), ox = m.x, oz = m.z; m.x += (r.x - m.x) * k; m.z += (r.z - m.z) * k; if (!m.home.isl) m.y = terrainH(m.x, m.z); m.hp = r.hp; m.moving = Math.hypot(m.x - ox, m.z - oz) > dt * 0.6; m.rot = Math.atan2(r.o.x - m.x, r.o.z - m.z); if (m.state === 'chase') m.state = 'idle'; }
+  else if (m.stun > 0) m.stun -= dt;
   else if (m.state === 'idle') {
     if (m.def.aggro && reachable && d < (m.def.boss ? (dn ? 18 : 30) : dn ? 11 : 13) && (!dn || p.dun === dn)) m.state = 'chase';
     else if (!m.def.boss) { m.wanderT -= dt; if (m.wanderT <= 0) { m.wanderT = rnd(3, 8); m.tx = m.sx + rnd(-7, 7); m.tz = m.sz + rnd(-7, 7); } moveMob(m, m.tx, m.tz, spd * 0.35, dt); }
@@ -1973,41 +1992,107 @@ function refreshModel() {
   p.model = heroModel(p.cls, p.spec, p.hair, p.equip.weapon && p.equip.weapon.id, p.equip.weapon ? p.equip.weapon.r || 0 : 0, p.equip.board ? (p.equip.board.id === 'brett2' ? 2 : 1) : 0);
 }
 
-/* ---------- Mehrspieler: andere Spieler, die die Seite gerade offen haben ---------- */
-// Jeder sendet nur seinen eigenen Zustand (Position, Aussehen). Alles Empfangene ist ungeprüft und wird nur angezeigt.
-const others = new Map(); let room = null, netT = 0, myMsg = null;
+/* ---------- Mehrspieler ---------- */
+// Jeder sendet nur seinen eigenen Zustand (Position, Aussehen, Ziel-Monster, kurze Ereignisliste). Alles Empfangene ist
+// ungeprüft und wird nur angezeigt bzw. in engen Grenzen angewendet. Funktioniert über die geteilte Seite oder den eigenen Server.
+const others = new Map(); let room = null, netT = 0, myMsg = null, myPeer = '', evSeq = 1, party = null; const myEv = [];
+const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* egal */ } };
+let uid = lsGet('wolkenreich_uid', null); if (typeof uid !== 'string') { uid = Math.random().toString(36).slice(2, 12); lsSet('wolkenreich_uid', uid); }
+let friends = lsGet('wolkenreich_friends', []); if (!Array.isArray(friends)) friends = [];
+const sendEv = (...a) => { myEv.push({ s: evSeq++, t: time, a }); if (myEv.length > 14) myEv.shift(); };
 const num = (v, a, b, d) => typeof v === 'number' && isFinite(v) ? clamp(v, a, b) : d;
-function dropOther(id) { const o = others.get(id); if (!o) return; scene.remove(o.model.g); o.lbl.remove(); others.delete(id); log(`${o.name} hat die Welt verlassen.`, 'e'); }
+const myDun = () => p.dun ? p.dun.id : null;
+const remoteActive = m => m.remote && time - m.remote.t < 1.2;
+const partyNear = () => party ? [...others.values()].filter(o => o.pt === party && o.dun === myDun() && Math.hypot(o.x - p.x, o.z - p.z) < 90) : [];
+function dropOther(id) { const o = others.get(id); if (!o) return; scene.remove(o.model.g); o.lbl.remove(); others.delete(id); log(`${o.name} hat die Welt verlassen.`, 'e'); if (curNpc === o) showWin('winNpc', false); }
+function questKill(defId) { const q = curQuest(); if (q && p.q.on && q.kill === defId && p.q.prog < q.n) { p.q.prog++; log(`${q.name}: ${p.q.prog} / ${q.n}`, 'e'); if (p.q.prog >= q.n) { log('Quest erfüllt! Kehre zu Mira zurück.', 'g'); beep(784, 0.2, 'triangle', 0.05); } renderQuests(); } }
+// Rückfragen (Gruppeneinladung, Freundschaftsanfrage)
+const asks = []; let askCur = null;
+function ask(text, yes) { asks.push({ text, yes }); nextAsk(); }
+function nextAsk() { if (askCur || !asks.length) return; askCur = asks.shift(); $('#askText').textContent = askCur.text; $('#ask').classList.remove('hidden'); beep(700, 0.2, 'triangle', 0.05, 200); askCur.to = setTimeout(() => answerAsk(false), 25000); }
+function answerAsk(ok) { if (!askCur) return; clearTimeout(askCur.to); const a = askCur; askCur = null; $('#ask').classList.add('hidden'); if (ok) a.yes(); nextAsk(); }
+$('#askYes').addEventListener('click', () => answerAsk(true)); $('#askNo').addEventListener('click', () => answerAsk(false));
+function addFriend(o) { if (!o.uid || friends.some(f => f.u === o.uid)) return; friends.push({ u: o.uid, n: o.name }); lsSet('wolkenreich_friends', friends); log(`${o.name} ist jetzt dein Freund. 💚`, 'g'); renderFriends(); }
+function handleEv(o, e) {
+  const t = e[1], near = o.dun === myDun() && Math.hypot(o.x - p.x, o.z - p.z) < 120;
+  if (t === 'h') { const m = mobs[e[2] | 0], d = num(e[3], 1, 1e7, 0) | 0; if (!m || m.dead || !d || !near) return; floatText(String(d), m.x, mobCenterY(m) + 1.6 * m.def.scale, m.z, 'ally'); m.hitT = 0.15; if (m.state === 'chase' && !remoteActive(m)) { m.hp -= d; if (m.hp <= 0) killMob(m); } }
+  else if (t === 'k') { const m = mobs[e[2] | 0]; if (!m) return; if (!m.dead) { m.dead = true; m.remote = null; m.g.visible = false; m.respawn = m.def.boss ? 150 : m.def.elite ? rnd(160, 200) : rnd(9, 14); if (p.target === m) setTarget(null); if (near) fx.kill(m.x, mobCenterY(m), m.z, m.def.color, Math.min(2.6, m.def.scale)); }
+    if (!party || e[5] !== party || !near || p.dead || Math.hypot(o.x - p.x, o.z - p.z) > 90) return; const xp = num(e[3], 0, m.def.exp * 2, 0) | 0, gold = num(e[4], 0, m.def.gold[1] * 2, 0) | 0; if (xp) gainExp(xp); if (gold) { p.gold += gold; log(`+${gold} Taler (Gruppe)`, 'g'); } questKill(m.def.id);
+    if (Array.isArray(e[6])) for (const it of e[6].slice(0, 8)) if (Array.isArray(it) && it[0] === uid) { const id = sharedItem(it[1], Math.min(num(it[4], 1, 100, 1), m.def.lvl + 2)); if (!id) continue; const r = isGear(id) ? (ITEMS[id].fr || num(it[2], 0, 4, 0) | 0) : 0; if (addItem(id, isGear(id) ? 1 : num(it[3], 1, 5, 1) | 0, 0, r)) { log(`Gruppenbeute: ${ITEMS[id].name}${isGear(id) ? ' (' + RAR[r].name + ')' : ''}`, r >= 2 ? 'g' : 'p'); beep(900, 0.07, 'triangle', 0.04); if (r >= 5) { center(RAR[r].name + 'e Waffe!', ITEMS[id].name); levelFx(); } } } }
+  else if (e[2] !== myPeer) return;
+  else if (t === 'pi' && typeof e[3] === 'string') { const pt = e[3].slice(0, 30); ask(`${o.name} lädt dich in eine Gruppe ein.`, () => { party = pt; log(`Du bist der Gruppe von ${o.name} beigetreten.`, 'g'); renderParty(); }); }
+  else if (t === 'fr') { if (friends.some(f => f.u === o.uid)) return sendEv('fa', o.id); ask(`${o.name} möchte mit dir befreundet sein.`, () => { addFriend(o); sendEv('fa', o.id); }); }
+  else if (t === 'fa') addFriend(o);
+}
+// Geteilte Ausrüstung kommt als Art + Stufe an und wird zur eigenen Klasse passend erzeugt
+function sharedItem(code, lvl) {
+  if (typeof code !== 'string') return null; if (code[0] !== '@') return ITEMS[code] && !isGear(code) ? code : null; const t = code.slice(1);
+  if (t === 'l' || t === 'b') { if (p.cls === 'wanderer' || lvl < (t === 'l' ? 60 : 80)) return null; let best = null; for (const id in ITEMS) if (id.startsWith(t + '_' + p.cls) && ITEMS[id].lvl <= lvl && (!best || ITEMS[id].lvl > ITEMS[best].lvl)) best = id; return best; }
+  const a = { ring: 'r', ear: 'e', neck: 'n', arm: 'a' }[t]; if (a) { const tier = [80, 60, 40, 20].findIndex(L => L <= lvl), id = 'x_' + a + '_' + p.cls + (3 - tier); return tier >= 0 && ITEMS[id] ? id : null; }
+  return GEAR.includes(t) ? gearFor(t, lvl) : null;
+}
 function syncOther(pe) {
   const s = pe.presence; if (!s || typeof s.x !== 'number' || !CLASSES[s.c]) return dropOther(pe.peer);
-  const name = String(s.n || 'Abenteurer').slice(0, 14), spec = SPECS[s.sp] && SPECS[s.sp].base === s.c ? s.sp : null, hair = num(s.h, 0, 0xffffff, HAIRS[0]), wid = ITEMS[s.w] && ITEMS[s.w].type === 'weapon' ? s.w : null, wr = num(s.wr, 0, 6, 0) | 0, bd = num(s.b, 0, 2, 0) | 0, key = [s.c, spec, hair, wid, wr, bd].join('|');
+  const name = String(s.n || 'Abenteurer').slice(0, 14), spec = SPECS[s.sp] && SPECS[s.sp].base === s.c ? s.sp : null, hair = num(s.h, 0, 0xffffff, HAIRS[0]), wid = ITEMS[s.w] && ITEMS[s.w].type === 'weapon' ? s.w : null, wr = num(s.wr, 0, 6, 0) | 0, bd = num(s.b, 0, 2, 0) | 0, key = [s.c, spec, hair, wid, wr, bd].join('|'), evs = Array.isArray(s.ev) ? s.ev.filter(e => Array.isArray(e) && typeof e[0] === 'number').slice(0, 16) : [];
   let o = others.get(pe.peer);
-  if (!o) { const lbl = document.createElement('div'); lbl.className = 'lbl plbl'; $('#labels').appendChild(lbl); o = { lbl, key: '', x: s.x, y: num(s.y, -50, 300, 2), z: num(s.z, -9999, 9999, 0), rot: 0, mt: num(s.mt, 0, 9e15, 0), say: '', sayT: 0 }; others.set(pe.peer, o); log(`${name} ist jetzt in der Welt. 👋`, 'g'); beep(660, 0.15, 'triangle', 0.04, 200); }
-  if (o.key !== key) { if (o.model) scene.remove(o.model.g); o.model = heroModel(s.c, spec, hair, wid, wr, bd); o.key = key; }
+  if (!o) { const lbl = document.createElement('div'); lbl.className = 'lbl plbl'; $('#labels').appendChild(lbl); o = { player: true, id: pe.peer, lbl, key: '', x: s.x, y: num(s.y, -50, 300, 2), z: num(s.z, -9999, 9999, 0), rot: 0, mt: num(s.mt, 0, 9e15, 0), say: '', sayT: 0, seq: evs.reduce((a, e) => Math.max(a, e[0]), 0) }; others.set(pe.peer, o); log(`${name} ist jetzt in der Welt. 👋`, 'g'); beep(660, 0.15, 'triangle', 0.04, 200); }
+  if (o.key !== key) { if (o.model) scene.remove(o.model.g); o.model = heroModel(s.c, spec, hair, wid, wr, bd); o.pick = addPick(o.model.g, 1.6, 2.6, 3.8, o, 'player'); o.key = key; }
   o.name = name; o.lvl = num(s.l, 1, MAXLVL, 1) | 0; o.cn = spec ? SPECS[spec].name : CLASSES[s.c].name; o.tx = num(s.x, -9999, 9999, 0); o.ty = num(s.y, -50, 300, 2); o.tz = num(s.z, -9999, 9999, 0); o.tr = num(s.r, -100, 100, 0); o.moving = !!s.m; o.flying = !!s.f; o.dun = typeof s.d === 'string' ? s.d : null; o.dead = !!s.k;
+  o.uid = typeof s.u === 'string' ? s.u.slice(0, 16) : ''; o.pt = typeof s.pt === 'string' ? s.pt.slice(0, 30) : null; o.hp = num(s.hp, 0, 100, 100); o.zn = String(s.zn || '').slice(0, 24); o.atk = num(s.at, 0, 9e15, 0);
   if (Math.hypot(o.tx - o.x, o.tz - o.z) > 60) { o.x = o.tx; o.y = o.ty; o.z = o.tz; }
+  if (o.atk > (o.atkSeen || 0)) { if (o.atkSeen !== undefined) o.model.play('attack'); o.atkSeen = o.atk; }
   const mt = num(s.mt, 0, 9e15, 0); if (mt > o.mt && typeof s.msg === 'string' && s.msg) { o.say = s.msg.slice(0, 80); o.sayT = 7; o.mt = mt; log(`${name}: ${o.say}`, 'p'); beep(880, 0.05, 'sine', 0.03); }
+  // Monster, mit denen der andere kämpft: er bestimmt Position und Leben (bei Gleichstand der kleinere Bezeichner)
+  if (o.dun === myDun() && Array.isArray(s.tg)) for (const g of s.tg.slice(0, 4)) { if (!Array.isArray(g)) continue; const m = mobs[g[0] | 0]; if (!m || m.dead) continue; if (m.state === 'chase' && !remoteActive(m) && myPeer && myPeer < o.id) continue; m.remote = { x: num(g[1], -9999, 9999, m.x), z: num(g[2], -9999, 9999, m.z), hp: num(g[3], 0, m.def.hp, m.hp), t: time, o }; }
+  for (const e of evs) if (e[0] > o.seq) { o.seq = e[0]; try { handleEv(o, e); } catch (er) { /* fehlerhafte Daten ignorieren */ } }
 }
 function updateOthers(dt) {
-  const myDun = p.dun ? p.dun.id : null;
   for (const o of others.values()) {
     const k = Math.min(1, dt * 9); o.x += (o.tx - o.x) * k; o.y += (o.ty - o.y) * k; o.z += (o.tz - o.z) * k; let dr = o.tr - o.rot; dr = Math.atan2(Math.sin(dr), Math.cos(dr)); o.rot += dr * k; if (o.sayT > 0) o.sayT -= dt;
-    const vis = started && o.dun === myDun; o.model.g.visible = vis; o.model.g.position.set(o.x, o.y, o.z); o.model.g.rotation.y = o.rot; if (vis) o.model.update(dt, { moving: o.moving, flying: o.flying, dead: o.dead });
+    const vis = started && o.dun === myDun(); o.model.g.visible = vis; o.model.g.position.set(o.x, o.y, o.z); o.model.g.rotation.y = o.rot; if (vis) o.model.update(dt, { moving: o.moving, flying: o.flying, dead: o.dead });
     const sc = vis && Math.hypot(o.x - p.x, o.z - p.z) < 130 ? toScreen(o.x, o.y + 4.1, o.z) : null;
-    if (sc) { const tx = `${o.name} · St. ${o.lvl}\n${o.cn}${o.sayT > 0 ? '\n💬 ' + o.say : ''}`; if (o.ltx !== tx) { o.ltx = tx; o.lbl.textContent = tx; } o.lbl.style.display = ''; o.lbl.style.left = sc.x + 'px'; o.lbl.style.top = sc.y + 'px'; } else o.lbl.style.display = 'none';
+    if (sc) { const tx = `${party && o.pt === party ? '⚑ ' : ''}${o.name} · St. ${o.lvl}\n${o.cn}${o.sayT > 0 ? '\n💬 ' + o.say : ''}`; if (o.ltx !== tx) { o.ltx = tx; o.lbl.textContent = tx; o.lbl.style.color = party && o.pt === party ? '#8fd8ff' : ''; } o.lbl.style.display = ''; o.lbl.style.left = sc.x + 'px'; o.lbl.style.top = sc.y + 'px'; } else o.lbl.style.display = 'none';
   }
   if (!room || !started) return; netT -= dt; if (netT > 0) return; netT = 0.1;
-  const r2 = v => Math.round(v * 100) / 100, st = { n: p.name, c: p.cls, sp: p.spec, h: p.hair, l: p.lvl, x: r2(p.x), y: r2(p.y), z: r2(p.z), r: r2(p.rot), m: p.model.run > 0.3 ? 1 : 0, f: p.flying ? 1 : 0, k: p.dead ? 1 : 0, d: p.dun ? p.dun.id : null, w: p.equip.weapon ? p.equip.weapon.id : null, wr: p.equip.weapon ? p.equip.weapon.r || 0 : 0, b: p.equip.board ? (p.equip.board.id === 'brett2' ? 2 : 1) : 0 };
-  if (myMsg) { st.msg = myMsg[0]; st.mt = myMsg[1]; } room.presence(st).catch(() => {});
+  while (myEv.length && time - myEv[0].t > 3) myEv.shift();
+  const r2 = v => Math.round(v * 100) / 100, tg = mobs.filter(m => !m.dead && m.state === 'chase' && !remoteActive(m) && Math.hypot(m.x - p.x, m.z - p.z) < 70).sort((a, b) => (b === p.target) - (a === p.target)).slice(0, 4).map(m => [m.idx, r2(m.x), r2(m.z), Math.max(0, Math.round(m.hp))]);
+  const st = { n: p.name, c: p.cls, sp: p.spec, h: p.hair, l: p.lvl, x: r2(p.x), y: r2(p.y), z: r2(p.z), r: r2(p.rot), m: p.model.run > 0.3 ? 1 : 0, f: p.flying ? 1 : 0, k: p.dead ? 1 : 0, d: myDun(), w: p.equip.weapon ? p.equip.weapon.id : null, wr: p.equip.weapon ? p.equip.weapon.r || 0 : 0, b: p.equip.board ? (p.equip.board.id === 'brett2' ? 2 : 1) : 0, u: uid, pt: party, hp: Math.round(clamp(p.hp / maxHP(), 0, 1) * 100), zn: zoneName, at: atkCount, tg, ev: myEv.map(e => [e.s].concat(e.a)) };
+  if (myMsg) { st.msg = myMsg[0]; st.mt = myMsg[1]; } const q = room.presence(st); if (q && q.catch) q.catch(() => {});
+}
+let atkCount = 0;
+// Eigener Server (server/server.js): gleiche Schnittstelle wie die geteilte Seite, über WebSocket
+function wsRoom(url) {
+  return new Promise(res => { let ws, h = null, er = null, done = false; const peers = {}, fin = v => { if (!done) { done = true; res(v); } }; try { ws = new WebSocket(url); } catch (e) { return fin(null); }
+    const fire = left => h && h({ peers: Object.keys(peers).map(id => ({ peer: id, sameTab: false, isMe: false, kind: 'viewer', presence: peers[id] })), left: left.map(id => ({ peer: id })), joined: [], updated: [] });
+    const api = { onPeers(fn, e) { h = fn; er = e; fire([]); }, presence: async st => { if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'p', s: st })); } };
+    ws.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } if (m.t === 'hi') { myPeer = String(m.id); Object.assign(peers, m.peers || {}); fin(api); fire([]); } else if (m.t === 'p') { peers[m.id] = m.s; fire([]); } else if (m.t === 'l') { delete peers[m.id]; fire([m.id]); } };
+    ws.onclose = ws.onerror = () => { if (done && er) er(); fin(null); }; setTimeout(() => fin(null), 25000); });
 }
 async function initNet() {
   try { room = window.claude && window.claude.use ? await window.claude.use('room') : null; } catch (e) { room = null; }
-  const el = $('#netinfo'); if (!room) { el.textContent = '👤 Einzelspieler'; el.title = 'Zusammen spielen geht nur über den geteilten Link, wenn dein Mitspieler angemeldet und eingeladen ist.'; return; }
-  const off = () => { room = null; for (const id of [...others.keys()]) dropOther(id); el.textContent = '👤 Einzelspieler'; };
-  room.onPeers(ch => { for (const pe of ch.left) dropOther(pe.peer); for (const pe of ch.peers) if (!pe.sameTab && pe.kind === 'viewer') syncOther(pe); el.textContent = `👥 ${others.size + 1} online`; el.title = 'Spieler, die die Seite gerade offen haben. Enter = Chat.'; }, off);
+  if (!room && /^https?:$/.test(location.protocol)) room = await wsRoom((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  const el = $('#netinfo'); if (!room) { el.textContent = '👤 Einzelspieler'; el.title = 'Zusammen spielen geht über den geteilten Link (angemeldet und eingeladen) oder über einen eigenen Server.'; return; }
+  const off = () => { room = null; for (const id of [...others.keys()]) dropOther(id); el.textContent = '👤 Verbindung getrennt'; };
+  room.onPeers(ch => { const me = ch.peers.find(q => q.sameTab); if (me) myPeer = me.peer; for (const pe of ch.left) dropOther(pe.peer); for (const pe of ch.peers) if (!pe.sameTab && pe.kind === 'viewer') syncOther(pe); el.textContent = `👥 ${others.size + 1} online`; el.title = 'Spieler, die gerade verbunden sind. Enter = Chat, Klick auf einen Spieler = Gruppe/Freund.'; }, off);
   el.textContent = '👥 1 online';
 }
 initNet();
+/* ---------- Gruppe & Freunde ---------- */
+function openPlayer(o) {
+  curNpc = o; shopOpen = false; $('#npcTitle').textContent = `${o.name} – ${o.cn} · St. ${o.lvl}`; const inP = party && o.pt === party, fr = friends.some(f => f.u === o.uid);
+  $('#npcBody').innerHTML = `<div class="muted">${inP ? 'Ihr seid in einer Gruppe: Erfahrung, Taler und Beute werden geteilt, wenn ihr nah beieinander kämpft.' : 'In einer Gruppe teilt ihr Erfahrung, Taler und Beute.'}</div><div class="npcbtns">${inP ? '' : `<button data-pinv="${esc(o.id)}">⚑ In Gruppe einladen</button>`}${fr ? '<span class="muted">💚 Ihr seid befreundet</span>' : `<button data-pfr="${esc(o.id)}">💚 Freundschaftsanfrage</button>`}</div>`; showWin('winNpc', true);
+}
+function invite(o) { if (!party) party = 'g' + uid + Date.now().toString(36); sendEv('pi', o.id, party); log(`Gruppeneinladung an ${o.name} gesendet.`, 'e'); renderParty(); }
+function renderParty() {
+  const el = $('#party'), mem = party ? [...others.values()].filter(o => o.pt === party) : []; el.classList.toggle('hidden', !party); if (!party) return;
+  el.innerHTML = `<div class="pf-top"><span>⚑ Gruppe (${mem.length + 1})</span><button id="partyLeave">Verlassen</button></div>` + (mem.length ? mem.map(o => `<div class="pm"><span>${esc(o.name)} <small>St. ${o.lvl}${o.dun !== myDun() ? ' · woanders' : ''}</small></span><div class="bar hp"><i style="width:${o.hp}%"></i></div></div>`).join('') : '<div class="muted" style="font-size:12px">Warte auf Mitglieder …</div>');
+}
+$('#party').addEventListener('click', e => { if (e.target.id === 'partyLeave') { party = null; log('Du hast die Gruppe verlassen.', 'e'); renderParty(); } });
+function renderFriends() {
+  const b = $('#friendBody'); if ($('#winFriends').classList.contains('hidden')) return;
+  b.innerHTML = (friends.length ? friends.map(f => { const o = [...others.values()].find(q => q.uid === f.u); return `<div class="shoprow"><span class="ic">${o ? '🟢' : '⚪'}</span><span class="nm">${esc(o ? o.name : f.n)}<small>${o ? `online · ${esc(o.cn)} St. ${o.lvl}${o.zn ? ' · ' + esc(o.zn) : ''}` : 'offline'}</small></span>${o && !(party && o.pt === party) ? `<button data-pinv="${esc(o.id)}">⚑ Einladen</button>` : ''}<button data-unf="${esc(f.u)}">✕</button></div>`; }).join('') : '<div class="muted">Noch keine Freunde. Klicke in der Welt auf einen anderen Spieler und sende eine Freundschaftsanfrage.</div>') + `<div class="muted" style="margin-top:8px">${room ? `Gerade online: ${others.size + 1} Spieler` : 'Nicht verbunden (Einzelspieler).'}</div>`;
+}
+document.addEventListener('click', e => { const d = e.target.dataset; if (!d) return; const o = others.get(d.pinv || d.pfr); if (d.pinv && o) { invite(o); if (curNpc === o) showWin('winNpc', false); } else if (d.pfr && o) { sendEv('fr', o.id); log(`Freundschaftsanfrage an ${o.name} gesendet.`, 'e'); if (curNpc === o) showWin('winNpc', false); } else if (d.unf) { friends = friends.filter(f => f.u !== d.unf); lsSet('wolkenreich_friends', friends); renderFriends(); } });
 function sendChat(t) { t = [...t].filter(ch => { const c = ch.codePointAt(0); return c >= 32 && !(c >= 127 && c <= 159) && !(c >= 0x200b && c <= 0x200f) && !(c >= 0x2028 && c <= 0x202f) && !(c >= 0x2060 && c <= 0x206f) && c !== 0xfeff; }).join('').trim().slice(0, 80); if (!t) return; log(`${p.name}: ${t}`, 'p'); if (room) myMsg = [t, Date.now()]; else log('(Niemand sonst ist verbunden.)', 'e'); }
 const chatIn = $('#chatIn');
 chatIn.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') { sendChat(chatIn.value); chatIn.value = ''; chatIn.classList.add('hidden'); chatIn.blur(); } else if (e.key === 'Escape') { chatIn.value = ''; chatIn.classList.add('hidden'); chatIn.blur(); } });
@@ -2026,7 +2111,7 @@ function updatePlayer(dt) {
     const t = p.target, dx = t.x - p.x, dz = t.z - p.z, d = Math.hypot(dx, dz), rng = cls().range + t.def.scale * 0.8;
     if (Math.abs(t.y - p.y) > 10) { p.attacking = false; }
     else if (d > rng * 0.92) { mx = dx; mz = dz; }
-    else { p.rot = Math.atan2(dx, dz); if (p.queued) { const k = p.queued; p.queued = null; castSkill(k, true); } else if (p.atkT <= 0) { p.atkT = atkInterval(); p.model.play('attack'); deliver(t, 1); } }
+    else { p.rot = Math.atan2(dx, dz); if (p.queued) { const k = p.queued; p.queued = null; castSkill(k, true); } else if (p.atkT <= 0) { p.atkT = atkInterval(); p.model.play('attack'); atkCount++; deliver(t, 1); } }
   } else if (p.interact) {
     const n = p.interact, dx = n.x - p.x, dz = n.z - p.z; if (Math.hypot(dx, dz) < 4.5) { p.interact = null; p.rot = Math.atan2(dx, dz); openNpc(n); } else { mx = dx; mz = dz; }
   } else if (p.moveTo) { const dx = p.moveTo.x - p.x, dz = p.moveTo.z - p.z; if (Math.hypot(dx, dz) < 0.4) p.moveTo = null; else { mx = dx; mz = dz; } }
@@ -2102,6 +2187,7 @@ function updateHud(dt) {
     if (p.dun) zn = p.dun.name; else if (here && p.y < here.h + 12) zn = here.name; else if (isl && p.y > isl.y - 2) zn = isl.name || 'Himmelsinseln'; else if (d0 < 82) zn = 'Luminhafen'; else for (const z of ZONES) if (Math.hypot(p.x - z.x, p.z - z.z) < z.r * 1.1) zn = z.name;
     if (zn !== zoneName) { zoneName = zn; const zz = ZONES.find(q => q.name === zn); zoneKey = p.dun ? p.dun.amb : zz ? zz.id : zn === 'Luminhafen' || PLACES.some(q => q.name === zn) ? 'town' : isl ? 'isl' : ''; $('#zone').textContent = zn; if (zn !== 'Wildnis') { const z = ZONES.find(q => q.name === zn); center(zn, z ? `Monster ab Stufe ${MOBS[z.mobs[0][0]].lvl}` : p.dun ? `Dungeon · Stufe ${p.dun.lvl}–${p.dun.max}` : PLACES.some(q => q.name === zn) ? (PLACES.find(q => q.name === zn).type === 'dorf' ? 'Sicheres Dorf' : 'Station') : isl ? `Monster ab Stufe ${MOBS[isl.mobs[0][0]].lvl}` : 'Sicheres Dorf'); } }
     MUSIC.setMood(mobs.some(m => m.def.boss && !m.dead && m.state === 'chase') ? 'boss' : p.dun || ['wald', 'ruinen', 'glut', 'vulkan', 'moor'].includes(zoneKey) ? 'dark' : zoneKey === 'town' ? 'town' : zoneKey === 'isl' ? 'sky' : 'field');
+    renderParty(); renderFriends();
     for (const n of npcs) { const mk = npcMark(n), html = `${mk ? `<span class="qm">${mk}</span>` : ''}${n.name}<small>${n.role}</small>`; if (n._h !== html) { n._h = html; n.lbl.innerHTML = html; } }
   }
   if (p.dun) { const d = p.dun, alive = [0, 0, 0, 0, 0], pi = dunIdx(d, p.x, p.z); for (const m of mobs) if (m.home.dun === d && !m.dead) alive[m.home.ri]++; for (let i = 1; i < 4; i++) { d.locks[i] = alive[i] > 0 && pi <= i; d.gates[i].visible = alive[i] > 0; } }
@@ -2178,9 +2264,9 @@ canvas.addEventListener('wheel', e => { cam.dist = clamp(cam.dist * (e.deltaY > 
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 function clickWorld(cx, cy) {
   if (p.dead) return; ndc.set(cx / window.innerWidth * 2 - 1, -(cy / window.innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera);
-  const picks = []; for (const m of mobs) if (!m.dead && Math.hypot(m.x - p.x, m.z - p.z) < 120) picks.push(m.pick); for (const n of npcs) picks.push(n.pick); for (const n of portals) if (Math.hypot(n.x - p.x, n.z - p.z) < 150) picks.push(n.pick);
+  const picks = []; for (const m of mobs) if (!m.dead && Math.hypot(m.x - p.x, m.z - p.z) < 120) picks.push(m.pick); for (const n of npcs) picks.push(n.pick); for (const o of others.values()) if (o.model.g.visible) picks.push(o.pick); for (const n of portals) if (Math.hypot(n.x - p.x, n.z - p.z) < 150) picks.push(n.pick);
   const hit = ray.intersectObjects(picks, false)[0];
-  if (hit) { const u = hit.object.userData; if (u.kind === 'mob') { if (p.target === u.ent) startAttack(); else { setTarget(u.ent); beep(500, 0.03, 'sine', 0.03); } } else { p.interact = u.ent; p.attacking = false; p.moveTo = null; } return; }
+  if (hit) { const u = hit.object.userData; if (u.kind === 'mob') { if (p.target === u.ent) startAttack(); else { setTarget(u.ent); beep(500, 0.03, 'sine', 0.03); } } else if (u.kind === 'player') openPlayer(u.ent); else { p.interact = u.ent; p.attacking = false; p.moveTo = null; } return; }
   const gh = ray.intersectObjects(groundMeshes, false)[0];
   if (gh && gh.point.y > WATER - 0.3) { p.moveTo = { x: gh.point.x, z: gh.point.z }; p.attacking = false; p.queued = null; p.interact = null; ring(gh.point.x, gh.point.y, gh.point.z, 0xffffff, 1.6, 0.35); }
 }
@@ -2190,7 +2276,7 @@ window.addEventListener('keydown', e => {
   if (k === 'enter') { keys[k] = false; chatIn.classList.remove('hidden'); chatIn.focus(); e.preventDefault(); return; }
   if (k >= '0' && k <= '9') { const s = slots.find(q => q.key === k); if (s) s.act(); }
   else if (k === 'tab') { e.preventDefault(); setTarget(nearestMob(45, p.target) || p.target); }
-  else if (k === 'f') toggleFly(); else if (k === 'c') toggleWin('winChar'); else if (k === 'i' || k === 'b') toggleWin('winInv'); else if (k === 'l' || k === 'q') toggleWin('winQuest'); else if (k === 'h') toggleWin('winHelp'); else if (k === 'm') toggleWin('winMap');
+  else if (k === 'f') toggleFly(); else if (k === 'c') toggleWin('winChar'); else if (k === 'i' || k === 'b') toggleWin('winInv'); else if (k === 'l' || k === 'q') toggleWin('winQuest'); else if (k === 'h') toggleWin('winHelp'); else if (k === 'm') toggleWin('winMap'); else if (k === 'o') toggleWin('winFriends');
   else if (k === 'escape') { const open = [...document.querySelectorAll('.win')].filter(w => !w.classList.contains('hidden')); if (open.length) open.forEach(w => showWin(w.id, false)); else setTarget(null); }
   else if (k === ' ') e.preventDefault();
 });
@@ -2246,7 +2332,7 @@ function frame() {
 frame();
 
 // Für Tests / Neugierige
-window.WRGAME = { refresh: refreshModel, portals, p, mobs, npcs, cam, startGame, hitMob, gainExp, addItem, castSkill, toggleFly, startAttack, setTarget, nearestMob, openNpc, terrainH, save, keys, loots };
+window.WRGAME = { refresh: refreshModel, others, openPlayer, portals, p, mobs, npcs, cam, startGame, hitMob, gainExp, addItem, castSkill, toggleFly, startAttack, setTarget, nearestMob, openNpc, terrainH, save, keys, loots };
 })();
 
 </script>

@@ -27,8 +27,31 @@ Nach Änderungen am Code: `node build.js` erzeugt die Standalone-Datei neu.
 - Große Weltkarte (`M`) mit Gebieten, Stufenbereichen, Orten, Dungeon-Portalen und Questziel
 - Drei Dörfer (Luminhafen, Birkenau, Aschenfurt) und sechs Stationen mit Händlern; Wegsteine erlauben Schnellreisen zu besuchten Orten
 - Musik, die live im Browser erzeugt wird und je nach Ort wechselt (Dorf, Wildnis, Himmel, dunkle Gebiete und Dungeons, Bosskampf); Knopf 🎵 schaltet laut, leise, aus
-- Zusammen spielen über die veröffentlichte Seite: Wer sie gleichzeitig offen hat, sieht die anderen als Figuren in der Welt und kann chatten (`Enter`). Monster, Beute und Fortschritt bleiben pro Spieler getrennt; die Einzeldatei ist immer Einzelspieler
+- Mehrspieler: andere Spieler erscheinen als Figuren in der Welt, mit Chat (`Enter`). Monster lassen sich gemeinsam bekämpfen
+- Gruppe (Klick auf einen Spieler → einladen): Erfahrung mit Bonus, Taler zu gleichen Teilen, Beute per Los; Ausrüstung kommt passend zur Klasse des Empfängers an
+- Freundesliste (`O`) mit Online-Status und Gruppeneinladung
 - Fliegen mit Flugbrett, Minimap, automatisches Speichern (localStorage)
+
+## Zusammen spielen
+
+Es gibt zwei Wege, beide nutzen dieselbe Technik (jeder sendet seinen Zustand, die anderen zeigen ihn an):
+
+1. **Geteilte Seite bei Claude:** Mitspieler müssen angemeldet und eingeladen sein.
+2. **Eigener Server** – dann reicht ein Link, ohne Anmeldung:
+
+   ```
+   node build.js            # erzeugt wolkenreich-standalone.html
+   node server/server.js    # startet auf Port 8080 (anderer Port: PORT=3000 node server/server.js)
+   ```
+
+   Der Server braucht nur Node.js (ab Version 18) und keine weiteren Pakete. Er liefert das Spiel unter `/` aus und
+   verbindet die Spieler über `/ws`. Damit Freunde von außen mitspielen können, muss er auf einem Rechner laufen, der
+   aus dem Internet erreichbar ist – zum Beispiel bei einem Hosting-Dienst für Node.js-Anwendungen, der WebSockets
+   unterstützt. Den Link dieses Dienstes schickst du deinen Mitspielern.
+
+Grenzen: Es gibt keinen zentralen Schiedsrichter. Wer ein Monster zuerst angreift, bestimmt dessen Position und Leben
+für alle; Treffer der anderen werden ihm gemeldet. Spielstände bleiben im Browser jedes Spielers. Der Server prüft
+keine Werte – gedacht für das Spielen mit Freunden, nicht für fremde Mitspieler.
 
 ## Grafik
 
