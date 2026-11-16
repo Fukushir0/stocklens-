@@ -117,6 +117,7 @@ const WR = (() => {
     const n = SETS[c].acc.name, pr = L * L * 20;
     I('x_r_' + c + i, { name: `${n}-Ring ${ROM[i]}`, type: 'ring', cls: c, atk: Math.round(L * 0.9), lvl: L, price: pr, icon: '💍', acc: true });
     I('x_e_' + c + i, { name: `${n}-Ohrring ${ROM[i]}`, type: 'ear', cls: c, hpAdd: L * 12, lvl: L, price: pr, icon: '✨', acc: true });
+    I('x_a_' + c + i, { name: `${n}-Armreif ${ROM[i]}`, type: 'arm', cls: c, atk: Math.round(L * 0.5), def: Math.round(L * 0.4), lvl: L, price: Math.round(pr * 1.2), icon: '⭕', acc: true });
     I('x_n_' + c + i, { name: `${n}-Kette ${ROM[i]}`, type: 'neck', cls: c, def: Math.round(L * 0.6), hpAdd: L * 6, lvl: L, price: Math.round(pr * 1.4), icon: '📿', acc: true });
   });
   // Legendäre (ab 60) und blutige (ab 80) Waffen: fester Seltenheitsgrad fr, starke Boni
@@ -137,7 +138,8 @@ const WR = (() => {
   I('mp4',     { name: 'Elixier des Geistes', type: 'use', mp: 2500, price: 3800, icon: '🌀', lvl: 70 });
   I('brett1',  { name: 'Windbrett',    type: 'board', speed: 22, lvl: 8,  price: 1500,  icon: '🛹', desc: 'Ein schwebendes Brett. Damit kannst du fliegen!' });
   I('brett2',  { name: 'Sturmgleiter', type: 'board', speed: 34, lvl: 20, price: 12000, icon: '🪽', desc: 'Schneller als der Wind.' });
-  I('splitter',{ name: 'Sternsplitter', type: 'misc', price: 150, icon: '💎', desc: 'Der Schmied braucht ihn, um Ausrüstung zu verbessern.' });
+  I('splitter',{ name: 'Sternsplitter', type: 'misc', price: 150, icon: '💎', desc: 'Verbesserungsstein. Der Schmied braucht ihn für jede Verbesserung.' });
+  I('rolle',   { name: 'Verbesserungsrolle', type: 'misc', price: 500, icon: '📜', desc: 'Schriftrolle. Der Schmied braucht sie zusätzlich für jede Verbesserung ab +4.' });
   const drop = (id, name, price, icon, desc) => I(id, { name, type: 'misc', price, icon, desc });
   drop('gelee', 'Puffelgelee', 6, '🟢'); drop('kappe', 'Pilzkappe', 14, '🍄'); drop('schere', 'Krabbenschere', 30, '🦀'); drop('kern', 'Golemkern', 48, '🪨');
   drop('pelz', 'Schattenpelz', 70, '🐺'); drop('funke', 'Irrlichtfunke', 95, '🔮'); drop('glut', 'Glutpanzer', 130, '🪲'); drop('asche', 'Geisterasche', 170, '⚱️');
@@ -198,8 +200,8 @@ const WR = (() => {
     const m = MOBS[k], L = m.lvl; m.id = k;
     m.hp = Math.round(30 + L * 14 + L * L * 2.2); m.atk = Math.round(4 + L * 2.6 + L * L * 0.022); m.def = Math.round(L * 1.2);
     m.exp = Math.round(10 + L * L * 1.6); m.gold = [L * 3, Math.round(L * 7 + L * L * 0.15)]; m.speed = m.speed || 5;
-    if (m.elite) { m.hp = Math.round(m.hp * 2.2); m.atk = Math.round(m.atk * 1.25); m.exp = Math.round(m.exp * 2.6); m.gold = m.gold.map(v => v * 2); }
-    if (m.boss) { m.hp *= 14; m.atk = Math.round(m.atk * 1.7); m.exp *= 18; m.gold = [L * 130, L * 190]; }
+    if (m.elite) { m.hp = Math.round(m.hp * 1.5); m.atk = Math.round(m.atk * 0.8); m.exp = Math.round(m.exp * 2.6); m.gold = m.gold.map(v => v * 2); }
+    if (m.boss) { m.hp *= 7; m.exp *= 18; m.gold = [L * 130, L * 190]; }
   }
 
   const ZONES = [
@@ -270,8 +272,10 @@ const WR = (() => {
   ];
 
   const HAIRS = [0x5a3a22, 0xf2d16b, 0xd6453c, 0x3c6ad6, 0xe98ad0, 0xeeeeee];
+  // Verbesserung beim Schmied: Erfolgschance für +1 bis +10
+  const UPCHANCE = [1, 0.9, 0.8, 0.65, 0.5, 0.4, 0.3, 0.22, 0.15, 0.1];
   const MAXLVL = 100;
   const expNeed = l => Math.floor(40 * Math.pow(l, 1.9));
 
-  return { CLASSES, SPECS, SKILLS, RAR, SETS, SETF, DUNGEONS, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed };
+  return { CLASSES, SPECS, SKILLS, RAR, SETS, SETF, UPCHANCE, DUNGEONS, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed };
 })();

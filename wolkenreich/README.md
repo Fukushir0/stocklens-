@@ -17,10 +17,11 @@ Nach Änderungen am Code: `node build.js` erzeugt die Standalone-Datei neu.
 - Stufen bis 100, Attribute (STR/STA/DEX/INT), 26 aufeinander aufbauende Quests
 - 4 Klassen ab Stufe 10 (Klingenkämpfer, Arkanist, Waldläufer, Kleriker) mit je 3 Fertigkeiten
 - Zweite Klassenstufe ab Stufe 60: zwei Wege je Klasse (z. B. Sturmritter oder Berserker) mit je 3 weiteren Fertigkeiten
-- Inventar, Taler als Währung, Händler, Beute und Ausrüstungsverbesserung bis +10 beim Schmied
+- Inventar, Taler als Währung, Händler und Beute
+- Verbesserung von Waffen, Rüstung und Accessoires bis +10 beim Schmied: Sternsplitter, ab +4 zusätzlich Verbesserungsrollen, sinkende Erfolgschance (100 % bei +1 bis 10 % bei +10)
 - Seltenheitsgrade für Waffen und Rüstungen: Bronze, Silber, Gold, Platin, Diamant (bis +80 % Werte)
 - Vier Rüstungsplätze (Helm, Rüstung, Handschuhe, Stiefel) mit eigenem Rüstungs-Set je Klasse: Bonus, wenn alle vier denselben Seltenheitsgrad haben
-- Fünf Accessoire-Plätze (2 Ringe, 2 Ohrringe, Halskette) mit eigener Kollektion je Klasse; Accessoires gibt es nur in Dungeons und von Bossen
+- Sechs Accessoire-Plätze (2 Ringe, 2 Ohrringe, Halskette, Armreif) mit eigener Kollektion je Klasse; Accessoires gibt es nur in Dungeons und von Bossen
 - Legendäre Waffen (ab Stufe 60) und blutige Waffen (ab Stufe 80) mit eigenen Boni – nur als sehr seltene Boss-Beute
 - Vier Dungeons mit Elite-Monstern und Endboss: Wurzelkrypta (20–40), Frostgruft (40–60), Glutkern (60–80), Leerenspalt (80–100); die Portale stehen rund ums Dorf. Dungeon-Monster greifen von selbst an und verfolgen dich; eine Barriere öffnet sich erst, wenn der Raum geräumt ist
 - Fliegen mit Flugbrett, Minimap, automatisches Speichern (localStorage)

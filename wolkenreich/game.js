@@ -1,7 +1,7 @@
 'use strict';
 /* Wolkenreich – Engine */
 (() => {
-const { CLASSES, SPECS, SKILLS, RAR, SETS, SETF, DUNGEONS, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed } = WR;
+const { CLASSES, SPECS, SKILLS, RAR, SETS, SETF, UPCHANCE, DUNGEONS, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed } = WR;
 const $ = s => document.querySelector(s);
 const rnd = (a, b) => a + Math.random() * (b - a);
 const rint = (a, b) => Math.floor(rnd(a, b + 1));
@@ -62,8 +62,8 @@ const mod = k => p.buffs.reduce((a, b) => a * (b.m[k] || 1), 1);
 const cls = () => CLASSES[p.cls];
 const clsName = () => p.spec ? SPECS[p.spec].name : cls().name;
 const ARMOR = ['helm', 'armor', 'gloves', 'boots'], GEAR = ['weapon'].concat(ARMOR), SLOTN = { weapon: 'Waffe', helm: 'Helm', armor: 'Rüstung', gloves: 'Handschuhe', boots: 'Stiefel', board: 'Flugbrett' };
-const ACC = ['ear1', 'ear2', 'neck', 'ring1', 'ring2'], WTYPES = GEAR.concat(['ring', 'ear', 'neck']);
-Object.assign(SLOTN, { ear1: 'Ohrring', ear2: 'Ohrring', neck: 'Kette', ring1: 'Ring', ring2: 'Ring' });
+const ACC = ['ear1', 'ear2', 'neck', 'arm', 'ring1', 'ring2'], WTYPES = GEAR.concat(['ring', 'ear', 'neck', 'arm']), WEAR = GEAR.concat(ACC);
+Object.assign(SLOTN, { ear1: 'Ohrring', ear2: 'Ohrring', neck: 'Kette', arm: 'Armreif', ring1: 'Ring', ring2: 'Ring' });
 const BN = { hp: 'Leben', def: 'Verteidigung', atk: 'Angriff', crit: 'kritische Treffer', spd: 'Lauftempo', aspd: 'Angriffstempo', mp: 'Mana' };
 const setText = (b, r) => Object.keys(b).map(k => `+${Math.round(b[k] * SETF[r] * 1000) / 10} % ${BN[k]}`.replace('.', ',')).join(', ');
 // Set (4 Rüstungsteile) bzw. Kollektion (5 Accessoires) der eigenen Klasse: alle Teile im selben Seltenheitsgrad
@@ -71,7 +71,7 @@ function setInfo(kind) { const slots = kind === 'acc' ? ACC : ARMOR, def = SETS[
 const setFrac = k => { let f = 0; for (const kind of ['armor', 'acc']) { const si = setInfo(kind); if (si.full && si.def.b[k]) f += si.def.b[k] * SETF[si.r]; } return f; };
 const setB = (k, d) => d === 0 ? setFrac(k) : 1 + setFrac(k);
 const accSum = k => ACC.reduce((a, s) => a + eqVal(s, k), 0);
-function setLines() { let h = ''; for (const kind of ['armor', 'acc']) { const si = setInfo(kind); if (!si.any) continue; h += `<div style="margin:3px 0;font-size:12px;color:${RAR[si.r].col}" data-tip="${esc('<b>' + si.def.name + ' (' + RAR[si.r].name + ')</b><br>' + setText(si.def.b, si.r) + '<br><span class=muted>' + (kind === 'acc' ? 'Kollektion: beide Ringe, beide Ohrringe und die Kette' : 'Set: Helm, Rüstung, Handschuhe und Stiefel') + ' im selben Seltenheitsgrad.</span>')}">◆ ${si.def.name} ${si.n}/${si.need}${si.full ? '<br>aktiv: ' + setText(si.def.b, si.r) : ''}</div>`; } return h; }
+function setLines() { let h = ''; for (const kind of ['armor', 'acc']) { const si = setInfo(kind); if (!si.any) continue; h += `<div style="margin:3px 0;font-size:12px;color:${RAR[si.r].col}" data-tip="${esc('<b>' + si.def.name + ' (' + RAR[si.r].name + ')</b><br>' + setText(si.def.b, si.r) + '<br><span class=muted>' + (kind === 'acc' ? 'Kollektion: beide Ringe, beide Ohrringe, Kette und Armreif' : 'Set: Helm, Rüstung, Handschuhe und Stiefel') + ' im selben Seltenheitsgrad.</span>')}">◆ ${si.def.name} ${si.n}/${si.need}${si.full ? '<br>aktiv: ' + setText(si.def.b, si.r) : ''}</div>`; } return h; }
 const wBonus = (k, d) => { const e = p.equip.weapon, b = e && ITEMS[e.id].bonus; return b && b[k] !== undefined ? b[k] : d; };
 const maxHP = () => Math.round((90 + p.lvl * 20 + p.stats.sta * 10 + accSum('hpAdd')) * cls().hpM * (p.spec ? SPECS[p.spec].hpM : 1) * wBonus('hp', 1) * setB('hp', 1));
 const maxMP = () => Math.round((30 + p.lvl * 6 + p.stats.int * 7) * setB('mp', 1));
@@ -112,7 +112,7 @@ function itemTip(id, plus, r) {
   if (it.bonus) { const b = it.bonus, L = []; if (b.atk) L.push(`+${Math.round((b.atk - 1) * 100)} % Angriff`); if (b.crit) L.push(`+${Math.round(b.crit * 100)} % kritische Treffer`); if (b.aspd) L.push(`+${Math.round((b.aspd - 1) * 100)} % Angriffstempo`); if (b.hp) L.push(`+${Math.round((b.hp - 1) * 100)} % Leben`); if (b.leech) L.push(`Heilt dich um ${Math.round(b.leech * 100)} % des verursachten Schadens`); h += `<br><span style="color:${RAR[it.fr].col}">${L.join('<br>')}</span>`; }
   if (it.hpAdd) h += `<br>Leben: +${Math.round(it.hpAdd * m)}`;
   if (ARMOR.includes(it.type)) h += `<br><span class="muted">${SETS[it.cls || p.cls].armor.name}: 4 Teile im selben Grad geben einen Bonus</span>`;
-  if (it.acc) h += `<br><span class="muted">Kollektion ${SETS[it.cls].acc.name}: alle 5 Accessoires im selben Grad geben einen Bonus</span>`;
+  if (it.acc) h += `<br><span class="muted">Kollektion ${SETS[it.cls].acc.name}: alle 6 Accessoires im selben Grad geben einen Bonus</span>`;
   if (it.hp) h += `<br>Stellt ${it.hp} Leben her`; if (it.mp) h += `<br>Stellt ${it.mp} Mana her`;
   if (it.speed) h += `<br>Fluggeschwindigkeit: ${it.speed}`;
   if (it.cls) h += `<br>Klasse: ${CLASSES[it.cls].name}`; if (it.lvl > 1) h += `<br>Ab Stufe ${it.lvl}`;
@@ -211,7 +211,7 @@ function renderQuests() {
 function shopHtml(ids) {
   return ids.map(id => { const it = ITEMS[id]; return `<div class="shoprow" data-tip="${esc(itemTip(id))}"><span class="ic">${it.icon}</span><span class="nm">${it.name}<small>${it.atk ? 'Angriff ' + it.atk : it.def ? 'Verteidigung ' + it.def : it.hp ? '+' + it.hp + ' Leben' : it.mp ? '+' + it.mp + ' Mana' : 'Tempo ' + it.speed}${it.lvl > 1 ? ' · St. ' + it.lvl : ''}</small></span><button data-buy="${id}" ${p.gold < it.price ? 'disabled' : ''}>${it.price.toLocaleString('de-DE')} 💰</button></div>`; }).join('');
 }
-function upgradeInfo(slot) { const e = p.equip[slot]; if (!e) return null; const pl = e.plus || 0; return { e, pl, cost: Math.round(ITEMS[e.id].price * 0.15 * (pl + 1)) + 50, chance: Math.max(0.25, 1 - pl * 0.09), stones: 1 + Math.floor(pl / 4) }; }
+function upgradeInfo(slot) { const e = p.equip[slot]; if (!e) return null; const pl = e.plus || 0; return { e, pl, cost: Math.round(ITEMS[e.id].price * 0.12 * (pl + 1)) + 50, chance: UPCHANCE[pl] || 0, stones: 1 + Math.floor(pl / 3), scrolls: pl >= 7 ? 2 : pl >= 3 ? 1 : 0 }; }
 const portals = [];
 function buildDungeons() {
   const mk = (x, y, z, col, name, sub, o) => { const g = GFX.portal(col); g.position.set(x, y, z); g.rotation.y = o.ry || 0; const q = Object.assign({ portal: true, x, y, z, name, role: sub }, o); q.pick = addPick(g, 2.6, 4.6, 5.4, q, 'npc'); const l = document.createElement('div'); l.className = 'lbl'; l.innerHTML = `${name}<small>${sub}</small>`; $('#labels').appendChild(l); q.lbl = l; portals.push(q); return q; };
@@ -243,8 +243,10 @@ function openNpc(n) {
   } else if (n.id === 'ivo') {
     h = `Der Himmel ruft! Rüste ein Flugbrett aus und drücke <b>F</b>, um abzuheben. <b>Leertaste</b> steigt, <b>X</b> sinkt. Die Himmelsinseln liegen im Südosten.<div style="margin-top:8px">${shopHtml(['brett1', 'brett2'])}</div>`;
   } else if (n.id === 'borin') {
-    h = `Ich mache deine Ausrüstung stärker – jede Stufe bringt <b>+8 %</b>. Dafür brauche ich Sternsplitter 💎 (du hast ${countItem('splitter')}) und Taler. Wenn es misslingt, sind nur die Materialien weg.`;
-    for (const slot of GEAR) { const nm = SLOTN[slot]; const u = upgradeInfo(slot); h += `<div class="shoprow"><span class="ic">${u ? ITEMS[u.e.id].icon : '–'}</span><span class="nm">${u ? ITEMS[u.e.id].name + ' +' + u.pl : nm + ': nichts ausgerüstet'}${u && u.pl < 10 ? `<small>→ +${u.pl + 1} · Chance ${Math.round(u.chance * 100)} % · ${u.stones} 💎 + ${u.cost.toLocaleString('de-DE')} Taler</small>` : u ? '<small>Maximal verbessert</small>' : ''}</span>${u && u.pl < 10 ? `<button data-up="${slot}" ${p.gold < u.cost || countItem('splitter') < u.stones ? 'disabled' : ''}>Verbessern</button>` : ''}</div>`; }
+    h = `Ich verbessere Waffen, Rüstung und Accessoires bis <b>+10</b> – jede Stufe bringt <b>+8 %</b> auf die Werte. Ich brauche Sternsplitter 💎 (du hast <b>${countItem('splitter')}</b>) und Taler, ab <b>+4</b> zusätzlich Verbesserungsrollen 📜 (du hast <b>${countItem('rolle')}</b>). Beides findest du bei Monstern. Je höher die Stufe, desto öfter misslingt es – dann sind nur die Materialien weg.<div class="muted" style="margin:6px 0">Chancen: ${UPCHANCE.map((c, i) => `+${i + 1}: ${Math.round(c * 100)} %`).join(' · ')}</div>`;
+    let any = false;
+    for (const slot of WEAR) { const u = upgradeInfo(slot); if (!u) continue; any = true; const ok = p.gold >= u.cost && countItem('splitter') >= u.stones && countItem('rolle') >= u.scrolls; h += `<div class="shoprow"><span class="ic">${ITEMS[u.e.id].icon}</span><span class="nm">${gearName(u.e.id, u.e.r, u.pl)}${u.pl < 10 ? `<small>→ +${u.pl + 1} · Chance <b>${Math.round(u.chance * 100)} %</b> · ${u.stones} 💎${u.scrolls ? ' + ' + u.scrolls + ' 📜' : ''} + ${u.cost.toLocaleString('de-DE')} Taler</small>` : '<small>Maximal verbessert</small>'}</span>${u.pl < 10 ? `<button data-up="${slot}" ${ok ? '' : 'disabled'}>Verbessern</button>` : ''}</div>`; }
+    if (!any) h += '<div class="muted">Du trägst nichts, das ich verbessern könnte.</div>';
   } else if (n.id === 'kaela') {
     const reset = `<br><br>Für ${(p.lvl * 60).toLocaleString('de-DE')} Taler setze ich deine Attributpunkte zurück.<div class="npcbtns"><button data-act="reset" ${p.gold < p.lvl * 60 ? 'disabled' : ''}>Attribute zurücksetzen</button></div>`;
     if (p.cls === 'wanderer') {
@@ -267,11 +269,11 @@ $('#npcBody').addEventListener('click', e => {
     p.q = { i: p.q.i + 1, on: false, prog: 0 }; log(`Quest abgeschlossen: ${q.name}`, 'g'); center('Quest abgeschlossen!', q.name); beep(784, 0.25, 'triangle', 0.06, 400); gainExp(q.exp);
   } else if (d.buy) { const it = ITEMS[d.buy]; if (p.gold >= it.price && addItem(d.buy, 1)) { p.gold -= it.price; log(`Gekauft: ${it.name}`, 'g'); beep(880, 0.06); } }
   else if (d.up) {
-    const u = upgradeInfo(d.up); if (!u || p.gold < u.cost || countItem('splitter') < u.stones) return;
-    p.gold -= u.cost; removeItem('splitter', u.stones);
+    const u = upgradeInfo(d.up); if (!u || u.pl >= 10 || p.gold < u.cost || countItem('splitter') < u.stones || countItem('rolle') < u.scrolls) return;
+    p.gold -= u.cost; removeItem('splitter', u.stones); if (u.scrolls) removeItem('rolle', u.scrolls);
     if (Math.random() < u.chance) { u.e.plus = u.pl + 1; log(`Erfolg! ${ITEMS[u.e.id].name} ist jetzt +${u.e.plus}.`, 'p'); beep(700, 0.3, 'triangle', 0.06, 600); ring(p.x, p.y + 0.2, p.z, 0xffe07a, 4); }
-    else { log('Die Verbesserung ist misslungen …', 'r'); beep(160, 0.3, 'sawtooth', 0.05, -80); }
-    renderChar();
+    else { log(`Die Verbesserung auf +${u.pl + 1} ist misslungen (Chance ${Math.round(u.chance * 100)} %).`, 'r'); beep(160, 0.3, 'sawtooth', 0.05, -80); }
+    refreshModel(); renderChar();
   } else if (d.cls) {
     p.cls = d.cls; const w = 'w_' + d.cls + '0'; if (p.equip.weapon) p.inv.push({ id: p.equip.weapon.id, n: 1, plus: p.equip.weapon.plus || 0, r: p.equip.weapon.r || 0 }); p.equip.weapon = { id: w, plus: 0, r: 1 };
     p.hp = maxHP(); p.mp = maxMP(); center(cls().name + '!', 'Du hast deine Berufung gefunden.'); log(`Du bist jetzt ${cls().name} und erhältst: ${ITEMS[w].name}`, 'p');
@@ -396,11 +398,12 @@ function killMob(m) {
   const diff = p.lvl - m.def.lvl; gainExp(Math.max(1, Math.round(m.def.exp * clamp(1 - (diff - 3) * 0.15, 0.1, 1))));
   dropLoot(m, { gold: rint(m.def.gold[0], m.def.gold[1]) });
   if (Math.random() < (m.def.boss ? 1 : 0.45)) dropLoot(m, { item: m.def.drop });
-  if (Math.random() < (m.def.boss ? 1 : 0.025 + m.def.lvl * 0.002)) dropLoot(m, { item: 'splitter', n: m.def.boss ? 3 : 1 });
+  if (Math.random() < (m.def.boss ? 1 : (0.04 + m.def.lvl * 0.002) * (m.def.elite ? 2.5 : 1))) dropLoot(m, { item: 'splitter', n: m.def.boss ? 4 : 1 });
+  if (Math.random() < (m.def.boss ? 1 : (0.012 + m.def.lvl * 0.0008) * (m.def.elite ? 3 : 1))) dropLoot(m, { item: 'rolle', n: m.def.boss ? 2 : 1 });
   if (Math.random() < 0.08) dropLoot(m, { item: m.def.lvl >= 70 ? 'hp4' : m.def.lvl >= 40 ? 'hp3' : m.def.lvl >= 15 ? 'hp2' : 'hp1' });
   for (let i = 0, n = m.def.boss ? 3 : Math.random() < (m.def.elite ? 0.16 : 0.07) ? 1 : 0; i < n; i++) { const id = gearFor(GEAR[Math.floor(Math.random() * GEAR.length)], m.def.lvl + 2); if (id) dropLoot(m, { item: id, r: m.def.boss ? rollRarity(true) : Math.max(m.def.elite && Math.random() < 0.4 ? 1 : 0, rollRarity(false)) }); }
   // Accessoires: nur von Dungeon-Monstern und Bossen
-  if (p.cls !== 'wanderer' && (m.def.boss || (m.def.elite && Math.random() < 0.08 * (WRGAME.luck || 1)))) for (let i = 0, n = m.def.boss ? 2 : 1; i < n; i++) { const tier = [80, 60, 40, 20].findIndex(L => L <= m.def.lvl), id = tier < 0 ? null : 'x_' + 'ren'[Math.floor(Math.random() * 3)] + '_' + p.cls + (3 - tier); if (id && ITEMS[id]) dropLoot(m, { item: id, r: rollRarity(m.def.boss) }); }
+  if (p.cls !== 'wanderer' && (m.def.boss || (m.def.elite && Math.random() < 0.08 * (WRGAME.luck || 1)))) for (let i = 0, n = m.def.boss ? 2 : 1; i < n; i++) { const tier = [80, 60, 40, 20].findIndex(L => L <= m.def.lvl), id = tier < 0 ? null : 'x_' + 'rena'[Math.floor(Math.random() * 4)] + '_' + p.cls + (3 - tier); if (id && ITEMS[id]) dropLoot(m, { item: id, r: rollRarity(m.def.boss) }); }
   // Legendäre (Boss ab Stufe 60) und blutige Waffen (Boss ab Stufe 80): extrem selten
   if (m.def.boss && p.cls !== 'wanderer') { const special = pre => { let best = null; for (const id in ITEMS) { const it = ITEMS[id]; if (id.startsWith(pre + p.cls) && it.lvl <= m.def.lvl && (!best || it.lvl > ITEMS[best].lvl)) best = id; } return best; };
     const q = Math.random() / (WRGAME.luck || 1), id = m.def.lvl >= 80 && q < 0.025 ? special('b_') : m.def.lvl >= 60 && q < 0.075 ? special('l_') : null; if (id) dropLoot(m, { item: id, r: ITEMS[id].fr }); }
@@ -412,7 +415,7 @@ function dropLoot(m, o) {
   const a = rnd(0, 6.28), r = rnd(0.5, 2) * m.def.scale; loots.push(Object.assign({ g, x: m.x + Math.cos(a) * r, z: m.z + Math.sin(a) * r, y: m.y + 0.6, t: 0, n: 1 }, o));
 }
 function hurtPlayer(m) {
-  if (p.dead) return; const d = Math.max(1, Math.round(m.def.atk * rnd(0.85, 1.15) - defense() * 0.5)); p.hp -= d; p.combatT = 6;
+  if (p.dead) return; const a = m.def.atk * rnd(0.85, 1.15), d = Math.max(1, Math.round(a * a * 1.1 / (a * 1.1 + defense()))); p.hp -= d; p.combatT = 6;
   floatText('-' + d, p.x, p.y + 3.2, p.z, 'hurt'); beep(110, 0.08, 'sawtooth', 0.04);
   if (!p.target && !p.flying) { setTarget(m); }
   if (p.hp <= 0) die();
@@ -454,7 +457,7 @@ function updateMob(m, dt) {
   const reachable = !p.dead && Math.abs(p.y - m.y) < 6, dn = m.home.dun, spd = m.def.speed * (dn ? 1.35 : 1) * (m.slow > 0 ? 0.45 : 1); if (m.slow > 0) m.slow -= dt;
   if (m.stun > 0) m.stun -= dt;
   else if (m.state === 'idle') {
-    if (m.def.aggro && reachable && d < (m.def.boss ? 30 : dn ? 24 : 13) && (!dn || p.dun === dn)) m.state = 'chase';
+    if (m.def.aggro && reachable && d < (m.def.boss ? (dn ? 18 : 30) : dn ? 11 : 13) && (!dn || p.dun === dn)) m.state = 'chase';
     else if (!m.def.boss) { m.wanderT -= dt; if (m.wanderT <= 0) { m.wanderT = rnd(3, 8); m.tx = m.sx + rnd(-7, 7); m.tz = m.sz + rnd(-7, 7); } moveMob(m, m.tx, m.tz, spd * 0.35, dt); }
   } else if (m.state === 'chase') {
     if (!reachable || (dn ? p.dun !== dn : Math.hypot(m.x - m.sx, m.z - m.sz) > 55 || d > 65)) m.state = 'return';
