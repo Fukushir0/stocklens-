@@ -375,7 +375,7 @@ function setMood(m) {
 
 /* ---------- Dungeons & Portale ---------- */
 function dungeon(d) {
-  const g = new T.Group(); scene.add(g); const fm = new T.MeshStandardMaterial({ map: TX.cobble, color: d.col, roughness: 0.92 }), ps = [], W = d.w;
+  const g = new T.Group(); scene.add(g); const fm = new T.MeshStandardMaterial({ map: TX.cobble, color: d.col, roughness: 0.92 }), ps = [], W = d.w, gates = [];
   const pillar = (x, z, tall, lit) => { const h = tall ? 9 : 4.6; ps.push(pc('cyl6', d.wall, [x, d.y + h / 2, z], [tall ? 2.6 : 1.5, h, tall ? 2.6 : 1.5], null, 'stone', { g: 0.35 }), pc('box', d.wall, [x, d.y + h + 0.2, z], [tall ? 3.4 : 2, 0.45, tall ? 3.4 : 2], null, 'stone'), pc('box', d.wall, [x, d.y + 0.25, z], [tall ? 3.4 : 2, 0.5, tall ? 3.4 : 2], null, 'stone')); if (lit) { ps.push(pc('oct', d.glow, [x, d.y + h + 1.5, z], [tall ? 1.3 : 0.75, tall ? 2.4 : 1.4, tall ? 1.3 : 0.75], null, 'glow', { top: 0xffffff })); const s = glow(d.glow, tall ? 11 : 6, 0.55); s.position.set(x, d.y + h + 1.5, z); g.add(s); } };
   d.rooms.forEach((r, i) => {
     const m = new T.Mesh(new T.CylinderGeometry(r.r, r.r - 3, 7, 44), fm); m.position.set(r.x, d.y - 3.5, r.z); m.receiveShadow = true; g.add(m); groundMeshes.push(m);
@@ -387,9 +387,11 @@ function dungeon(d) {
   });
   for (let i = 0; i < d.rooms.length - 1; i++) {
     const a = d.rooms[i], b = d.rooms[i + 1], dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz), ry = Math.atan2(dx, dz), m = new T.Mesh(new T.BoxGeometry(W, 6, len), fm); m.position.set((a.x + b.x) / 2, d.y - 3, (a.z + b.z) / 2); m.rotation.y = ry; m.receiveShadow = true; g.add(m); groundMeshes.push(m);
+    if (i >= 1) { const t = (a.r + 2.6) / len, gm = new T.Mesh(new T.PlaneGeometry(W, 7), new T.MeshBasicMaterial({ map: TX.rune, color: d.glow, transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false, side: T.DoubleSide, blending: T.AdditiveBlending })); gm.position.set(a.x + dx * t, d.y + 3.6, a.z + dz * t); gm.rotation.y = ry; g.add(gm); gates[i] = gm; }
     const inner = len - a.r - b.r, cs = Math.cos(ry), sn = Math.sin(ry); for (const s of [-1, 1]) for (let k = 0; k <= Math.floor(inner / 5); k++) { const t = (a.r + 1 + k * 5) / len, x = a.x + dx * t + cs * s * (W / 2 - 0.4), z = a.z + dz * t - sn * s * (W / 2 - 0.4); ps.push(pc('box', d.wall, [x, d.y + 0.9, z], [0.9, 1.8, 0.9], [0, ry, 0], 'stone'), pc('box', d.wall, [x, d.y + 1.5, z], [0.5, 0.3, 5], [0, ry, 0], 'stone')); if (k % 2 === 0) ps.push(pc('oct', d.glow, [x, d.y + 2.3, z], [0.4, 0.7, 0.4], null, 'glow')); }
   }
   build(g, ps).forEach(m => { m.receiveShadow = true; });
+  return gates;
 }
 function portal(color) {
   const g = new T.Group(); build(g, [pc('cyl6', 0x8c8478, [-1.9, 2.4, 0], [1, 4.8, 1], null, 'stone', { g: 0.3 }), pc('cyl6', 0x8c8478, [1.9, 2.4, 0], [1, 4.8, 1], null, 'stone', { g: 0.3 }), pc('box', 0x9a948a, [0, 5.1, 0], [5.4, 0.8, 1.3], null, 'stone'), pc('box', 0x8c8478, [0, 0.2, 0], [5.6, 0.4, 2.2], null, 'stone'), pc('oct', color, [0, 6.1, 0], [0.7, 1.2, 0.7], null, 'glow', { top: 0xffffff }), pc('oct', color, [-1.9, 5.3, 0], [0.4, 0.7, 0.4], null, 'glow'), pc('oct', color, [1.9, 5.3, 0], [0.4, 0.7, 0.4], null, 'glow')]);

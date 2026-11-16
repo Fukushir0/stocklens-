@@ -19,9 +19,10 @@ Nach Änderungen am Code: `node build.js` erzeugt die Standalone-Datei neu.
 - Zweite Klassenstufe ab Stufe 60: zwei Wege je Klasse (z. B. Sturmritter oder Berserker) mit je 3 weiteren Fertigkeiten
 - Inventar, Taler als Währung, Händler, Beute und Ausrüstungsverbesserung bis +10 beim Schmied
 - Seltenheitsgrade für Waffen und Rüstungen: Bronze, Silber, Gold, Platin, Diamant (bis +80 % Werte)
-- Vier Rüstungsplätze (Helm, Rüstung, Handschuhe, Stiefel) mit Set-Bonus, wenn alle vier denselben Seltenheitsgrad haben
+- Vier Rüstungsplätze (Helm, Rüstung, Handschuhe, Stiefel) mit eigenem Rüstungs-Set je Klasse: Bonus, wenn alle vier denselben Seltenheitsgrad haben
+- Fünf Accessoire-Plätze (2 Ringe, 2 Ohrringe, Halskette) mit eigener Kollektion je Klasse; Accessoires gibt es nur in Dungeons und von Bossen
 - Legendäre Waffen (ab Stufe 60) und blutige Waffen (ab Stufe 80) mit eigenen Boni – nur als sehr seltene Boss-Beute
-- Vier Dungeons mit Elite-Monstern und Endboss: Wurzelkrypta (20–40), Frostgruft (40–60), Glutkern (60–80), Leerenspalt (80–100); die Portale stehen rund ums Dorf
+- Vier Dungeons mit Elite-Monstern und Endboss: Wurzelkrypta (20–40), Frostgruft (40–60), Glutkern (60–80), Leerenspalt (80–100); die Portale stehen rund ums Dorf. Dungeon-Monster greifen von selbst an und verfolgen dich; eine Barriere öffnet sich erst, wenn der Raum geräumt ist
 - Fliegen mit Flugbrett, Minimap, automatisches Speichern (localStorage)
 
 ## Grafik

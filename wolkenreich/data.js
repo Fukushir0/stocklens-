@@ -74,14 +74,16 @@ const WR = (() => {
     { name: 'Legendär', col: '#ff9a2a', hex: 0xff9a2a, m: 2.3, sell: 40, w: 0 },
     { name: 'Blutig',   col: '#ff3048', hex: 0xff3048, m: 2.7, sell: 60, w: 0 },
   ];
-  // Set-Bonus: alle vier Rüstungsteile (Helm, Rüstung, Handschuhe, Stiefel) im selben Seltenheitsgrad
-  const SETS = [
-    { name: 'Bronze-Set',  hp: 1.06, def: 1.08, text: '+6 % Leben, +8 % Verteidigung' },
-    { name: 'Silber-Set',  hp: 1.10, def: 1.15, text: '+10 % Leben, +15 % Verteidigung' },
-    { name: 'Gold-Set',    hp: 1.15, def: 1.15, atk: 1.10, text: '+15 % Leben, +15 % Verteidigung, +10 % Angriff' },
-    { name: 'Platin-Set',  hp: 1.22, def: 1.2, atk: 1.16, crit: 0.05, text: '+22 % Leben, +20 % Verteidigung, +16 % Angriff, +5 % kritische Treffer' },
-    { name: 'Diamant-Set', hp: 1.32, def: 1.3, atk: 1.25, crit: 0.10, spd: 1.12, text: '+32 % Leben, +30 % Verteidigung, +25 % Angriff, +10 % kritische Treffer, +12 % Lauftempo' },
-  ];
+  // Sets je Klasse. Rüstungs-Set: Helm, Rüstung, Handschuhe, Stiefel im selben Seltenheitsgrad (4/4).
+  // Kollektion: 2 Ringe, 2 Ohrringe, Halskette im selben Grad (5/5). Werte = Grundwert × Faktor des Grades.
+  const SETF = [1, 1.6, 2.3, 3.2, 4.5];
+  const SETS = {
+    wanderer:    { armor: { name: 'Reisenden-Set',     b: { hp: 0.03, def: 0.04 } },                          acc: { name: 'Glücksbringer', b: { hp: 0.03 } } },
+    klinge:      { armor: { name: 'Bollwerk-Set',      b: { hp: 0.05, def: 0.07, atk: 0.02 } },               acc: { name: 'Löwenherz',     b: { atk: 0.04, hp: 0.04 } } },
+    arkanist:    { armor: { name: 'Sternenweber-Set',  b: { atk: 0.05, mp: 0.06, crit: 0.01 } },              acc: { name: 'Astralauge',    b: { atk: 0.05, crit: 0.015 } } },
+    waldlaeufer: { armor: { name: 'Sturmjäger-Set',    b: { atk: 0.03, crit: 0.02, spd: 0.025, aspd: 0.02 } }, acc: { name: 'Falkenblick',   b: { crit: 0.025, aspd: 0.025 } } },
+    kleriker:    { armor: { name: 'Lichtbringer-Set',  b: { hp: 0.04, def: 0.04, atk: 0.035 } },              acc: { name: 'Seelenlicht',   b: { hp: 0.05, mp: 0.05, atk: 0.02 } } },
+  };
 
   const ITEMS = {};
   const I = (id, o) => { ITEMS[id] = Object.assign({ id }, o); };
@@ -103,6 +105,20 @@ const WR = (() => {
   // Helm, Handschuhe, Stiefel passend zu jeder Rüstungsstufe
   const ROOT = ['Reise', 'Leder', 'Gardisten', 'Runen', 'Himmels'].concat(PRE), AL = [1, 5].concat(TL), AD = [3, 8].concat(TD), AP = [30, 260].concat(TP.map(v => Math.round(v * 0.85 / 100) * 100));
   ROOT.forEach((n, i) => { for (const [k, type, suf, f, icon] of [['h', 'helm', 'helm', 0.5, '🪖'], ['g', 'gloves', 'handschuhe', 0.35, '🧤'], ['f', 'boots', 'stiefel', 0.4, '🥾']]) I(k + '_' + i, { name: n + suf, type, def: Math.max(1, Math.round(AD[i] * f)), lvl: AL[i], price: Math.max(20, Math.round(AP[i] * f / 10) * 10), icon }); });
+  // Klassen-Rüstungen ab Stufe 10 (die neutralen Teile ab dieser Stufe bleiben nur für alte Spielstände gültig)
+  const CW = { klinge: ['Plattenhelm', 'Plattenpanzer', 'Panzerhandschuhe', 'Plattenstiefel'], arkanist: ['Magierhut', 'Magierrobe', 'Magierhandschuhe', 'Magierschuhe'], waldlaeufer: ['Jägerkapuze', 'Jägerwams', 'Jägerhandschuhe', 'Jägerstiefel'], kleriker: ['Priesterkrone', 'Priesterrobe', 'Priesterhandschuhe', 'Priestersandalen'] };
+  for (let i = 2; i < ROOT.length; i++) {
+    for (const k of ['a', 'h', 'g', 'f']) ITEMS[k + '_' + i].old = true;
+    for (const c in CW) [['h', 'helm', 0.5, '🪖'], ['a', 'armor', 1, '🥋'], ['g', 'gloves', 0.35, '🧤'], ['f', 'boots', 0.4, '🥾']].forEach((q, n) => I('c' + q[0] + '_' + c + i, { name: ROOT[i] + '-' + CW[c][n], type: q[1], cls: c, def: Math.max(1, Math.round(AD[i] * q[2])), lvl: AL[i], price: Math.max(20, Math.round(AP[i] * q[2] / 10) * 10), icon: q[3] }));
+  }
+  // Accessoires (nur aus Dungeons und von Bossen): je Klasse eine Kollektion in vier Stufen
+  const AT = [20, 40, 60, 80], ROM = ['I', 'II', 'III', 'IV'];
+  for (const c in CW) AT.forEach((L, i) => {
+    const n = SETS[c].acc.name, pr = L * L * 20;
+    I('x_r_' + c + i, { name: `${n}-Ring ${ROM[i]}`, type: 'ring', cls: c, atk: Math.round(L * 0.9), lvl: L, price: pr, icon: '💍', acc: true });
+    I('x_e_' + c + i, { name: `${n}-Ohrring ${ROM[i]}`, type: 'ear', cls: c, hpAdd: L * 12, lvl: L, price: pr, icon: '✨', acc: true });
+    I('x_n_' + c + i, { name: `${n}-Kette ${ROM[i]}`, type: 'neck', cls: c, def: Math.round(L * 0.6), hpAdd: L * 6, lvl: L, price: Math.round(pr * 1.4), icon: '📿', acc: true });
+  });
   // Legendäre (ab 60) und blutige (ab 80) Waffen: fester Seltenheitsgrad fr, starke Boni
   const LEG = { klinge: 'Aurelion, Klinge der Morgenröte', arkanist: 'Astralis, Stab der Sterne', waldlaeufer: 'Zephyra, Bogen des Sturms', kleriker: 'Solaris, Zepter des Lichts' };
   const BLD = { klinge: 'Sanguis, die Blutklinge', arkanist: 'Cruor, der Blutstab', waldlaeufer: 'Vena, der Blutbogen', kleriker: 'Haema, das Blutzepter' };
@@ -257,5 +273,5 @@ const WR = (() => {
   const MAXLVL = 100;
   const expNeed = l => Math.floor(40 * Math.pow(l, 1.9));
 
-  return { CLASSES, SPECS, SKILLS, RAR, SETS, DUNGEONS, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed };
+  return { CLASSES, SPECS, SKILLS, RAR, SETS, SETF, DUNGEONS, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed };
 })();

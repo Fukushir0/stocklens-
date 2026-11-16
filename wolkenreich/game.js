@@ -1,7 +1,7 @@
 'use strict';
 /* Wolkenreich – Engine */
 (() => {
-const { CLASSES, SPECS, SKILLS, RAR, SETS, DUNGEONS, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed } = WR;
+const { CLASSES, SPECS, SKILLS, RAR, SETS, SETF, DUNGEONS, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed } = WR;
 const $ = s => document.querySelector(s);
 const rnd = (a, b) => a + Math.random() * (b - a);
 const rint = (a, b) => Math.floor(rnd(a, b + 1));
@@ -21,11 +21,13 @@ function terrainH(x, z) {
 function islandAt(x, z) { for (const i of ISLANDS) if (Math.hypot(x - i.x, z - i.z) < i.r - 0.5) return i; return null; }
 // Dungeons liegen weit außerhalb der Karte; Boden = Räume (Kreise) + Gänge dazwischen
 const DUN = DUNGEONS.map((d, i) => { const ox = 3000 + i * 900, f = i % 2 ? -1 : 1; return Object.assign({ y: 30, w: 10, rooms: [[0, 0, 14], [0, 62, 22], [52 * f, 120, 22], [52 * f, 190, 24], [0, 256, 34]].map(r => ({ x: ox + r[0], z: r[1], r: r[2] })) }, d); });
-function dunFloor(d, x, z, pad = 0) {
+function dunFloor(d, x, z, pad = 0, locks) {
   for (const r of d.rooms) if (Math.hypot(x - r.x, z - r.z) < r.r - 1.6 - pad) return true;
-  for (let i = 0; i < d.rooms.length - 1; i++) { const a = d.rooms[i], b = d.rooms[i + 1], dx = b.x - a.x, dz = b.z - a.z, t = clamp(((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz), 0, 1); if (Math.hypot(x - a.x - dx * t, z - a.z - dz * t) < d.w / 2 - 0.9 - pad) return true; }
+  for (let i = 0; i < d.rooms.length - 1; i++) { const a = d.rooms[i], b = d.rooms[i + 1], dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz), t = clamp(((x - a.x) * dx + (z - a.z) * dz) / (len * len), 0, locks && locks[i] ? (a.r + 2.2) / len : 1); if (Math.hypot(x - a.x - dx * t, z - a.z - dz * t) < d.w / 2 - 0.9 - pad) return true; }
   return false;
 }
+// Wo in der Raumkette steht jemand? Raum j -> j, Gang zwischen j und j+1 -> j + 0.5
+function dunIdx(d, x, z) { let best = 0, bd = 1e9; d.rooms.forEach((r, j) => { const q = Math.hypot(x - r.x, z - r.z); if (q < r.r) { best = j; bd = -1; } else if (bd >= 0 && q - r.r < bd) { bd = q - r.r; best = j; } }); if (bd < 0) return best; for (let i = 0; i < d.rooms.length - 1; i++) { const a = d.rooms[i], b = d.rooms[i + 1], dx = b.x - a.x, dz = b.z - a.z, t = ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz); if (t > 0 && t < 1 && Math.hypot(x - a.x - dx * t, z - a.z - dz * t) < d.w) return i + 0.5; } return best; }
 function groundAt(x, z, y) {
   if (x > 2500) { for (const d of DUN) if (dunFloor(d, x, z, -2.5)) return d.y; return -40; }
   const g = terrainH(x, z), i = islandAt(x, z);
@@ -60,17 +62,24 @@ const mod = k => p.buffs.reduce((a, b) => a * (b.m[k] || 1), 1);
 const cls = () => CLASSES[p.cls];
 const clsName = () => p.spec ? SPECS[p.spec].name : cls().name;
 const ARMOR = ['helm', 'armor', 'gloves', 'boots'], GEAR = ['weapon'].concat(ARMOR), SLOTN = { weapon: 'Waffe', helm: 'Helm', armor: 'Rüstung', gloves: 'Handschuhe', boots: 'Stiefel', board: 'Flugbrett' };
-// Set: alle vier Rüstungsteile im selben Seltenheitsgrad
-function setInfo() { const c = [0, 0, 0, 0, 0]; let n = 0; for (const k of ARMOR) if (p.equip[k]) { c[p.equip[k].r || 0]++; n++; } let best = 0; for (let i = 1; i < 5; i++) if (c[i] > c[best]) best = i; return { r: best, n: c[best], full: c[best] === 4 ? SETS[best] : null, any: n > 0 }; }
-const setB = (k, d) => { const f = setInfo().full; return f && f[k] !== undefined ? f[k] : d; };
+const ACC = ['ear1', 'ear2', 'neck', 'ring1', 'ring2'], WTYPES = GEAR.concat(['ring', 'ear', 'neck']);
+Object.assign(SLOTN, { ear1: 'Ohrring', ear2: 'Ohrring', neck: 'Kette', ring1: 'Ring', ring2: 'Ring' });
+const BN = { hp: 'Leben', def: 'Verteidigung', atk: 'Angriff', crit: 'kritische Treffer', spd: 'Lauftempo', aspd: 'Angriffstempo', mp: 'Mana' };
+const setText = (b, r) => Object.keys(b).map(k => `+${Math.round(b[k] * SETF[r] * 1000) / 10} % ${BN[k]}`.replace('.', ',')).join(', ');
+// Set (4 Rüstungsteile) bzw. Kollektion (5 Accessoires) der eigenen Klasse: alle Teile im selben Seltenheitsgrad
+function setInfo(kind) { const slots = kind === 'acc' ? ACC : ARMOR, def = SETS[p.cls][kind], c = [0, 0, 0, 0, 0]; let n = 0; for (const k of slots) if (p.equip[k]) { c[Math.min(4, p.equip[k].r || 0)]++; n++; } let best = 0; for (let i = 1; i < 5; i++) if (c[i] >= c[best] && c[i]) best = i; return { def, r: best, n: c[best], need: slots.length, full: c[best] === slots.length, any: n > 0 }; }
+const setFrac = k => { let f = 0; for (const kind of ['armor', 'acc']) { const si = setInfo(kind); if (si.full && si.def.b[k]) f += si.def.b[k] * SETF[si.r]; } return f; };
+const setB = (k, d) => d === 0 ? setFrac(k) : 1 + setFrac(k);
+const accSum = k => ACC.reduce((a, s) => a + eqVal(s, k), 0);
+function setLines() { let h = ''; for (const kind of ['armor', 'acc']) { const si = setInfo(kind); if (!si.any) continue; h += `<div style="margin:3px 0;font-size:12px;color:${RAR[si.r].col}" data-tip="${esc('<b>' + si.def.name + ' (' + RAR[si.r].name + ')</b><br>' + setText(si.def.b, si.r) + '<br><span class=muted>' + (kind === 'acc' ? 'Kollektion: beide Ringe, beide Ohrringe und die Kette' : 'Set: Helm, Rüstung, Handschuhe und Stiefel') + ' im selben Seltenheitsgrad.</span>')}">◆ ${si.def.name} ${si.n}/${si.need}${si.full ? '<br>aktiv: ' + setText(si.def.b, si.r) : ''}</div>`; } return h; }
 const wBonus = (k, d) => { const e = p.equip.weapon, b = e && ITEMS[e.id].bonus; return b && b[k] !== undefined ? b[k] : d; };
-const maxHP = () => Math.round((90 + p.lvl * 20 + p.stats.sta * 10) * cls().hpM * (p.spec ? SPECS[p.spec].hpM : 1) * wBonus('hp', 1) * setB('hp', 1));
-const maxMP = () => Math.round(30 + p.lvl * 6 + p.stats.int * 7);
-const eqVal = (slot, k) => { const e = p.equip[slot]; return e ? ITEMS[e.id][k] * RAR[e.r || 0].m * (1 + 0.08 * (e.plus || 0)) : 0; };
-const atkPower = () => (eqVal('weapon', 'atk') + p.stats[cls().stat] * 1.0 + p.lvl * 1.5) * mod('atk') * wBonus('atk', 1) * setB('atk', 1);
-const defense = () => (ARMOR.reduce((a, k) => a + eqVal(k, 'def'), 0) + p.stats.sta * 0.5) * mod('def') * setB('def', 1);
+const maxHP = () => Math.round((90 + p.lvl * 20 + p.stats.sta * 10 + accSum('hpAdd')) * cls().hpM * (p.spec ? SPECS[p.spec].hpM : 1) * wBonus('hp', 1) * setB('hp', 1));
+const maxMP = () => Math.round((30 + p.lvl * 6 + p.stats.int * 7) * setB('mp', 1));
+const eqVal = (slot, k) => { const e = p.equip[slot]; return e ? (ITEMS[e.id][k] || 0) * RAR[e.r || 0].m * (1 + 0.08 * (e.plus || 0)) : 0; };
+const atkPower = () => (eqVal('weapon', 'atk') + accSum('atk') + p.stats[cls().stat] * 1.0 + p.lvl * 1.5) * mod('atk') * wBonus('atk', 1) * setB('atk', 1);
+const defense = () => (ARMOR.reduce((a, k) => a + eqVal(k, 'def'), 0) + accSum('def') + p.stats.sta * 0.5) * mod('def') * setB('def', 1);
 const critChance = () => Math.min(0.75, 0.05 + p.stats.dex * 0.003 + wBonus('crit', 0) + setB('crit', 0));
-const atkInterval = () => clamp(1.25 - p.stats.dex * 0.006, 0.5, 1.25) / mod('aspd') / wBonus('aspd', 1);
+const atkInterval = () => clamp(1.25 - p.stats.dex * 0.006, 0.5, 1.25) / mod('aspd') / wBonus('aspd', 1) / setB('aspd', 1);
 const mySkills = () => Object.keys(SKILLS).filter(k => SKILLS[k].cls === '*' || SKILLS[k].cls === p.cls || SKILLS[k].cls === p.spec);
 
 /* ---------- Audio ---------- */
@@ -93,7 +102,7 @@ const v3 = new THREE.Vector3();
 function toScreen(x, y, z) { v3.set(x, y, z).project(camera); if (v3.z > 1 || v3.z < -1) return null; return { x: (v3.x * 0.5 + 0.5) * window.innerWidth, y: (-v3.y * 0.5 + 0.5) * window.innerHeight }; }
 function floatText(txt, x, y, z, c) { const s = toScreen(x, y, z); if (!s) return; const d = document.createElement('div'); d.className = 'dmg ' + (c || ''); d.textContent = txt; d.style.left = (s.x + rnd(-14, 14)) + 'px'; d.style.top = s.y + 'px'; $('#labels').appendChild(d); setTimeout(() => d.remove(), 900); }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const isGear = id => GEAR.includes(ITEMS[id].type);
+const isGear = id => WTYPES.includes(ITEMS[id].type);
 const gearName = (id, r, plus) => `<span style="color:${isGear(id) ? RAR[r || 0].col : '#ffd978'}">${ITEMS[id].name}${plus ? ' +' + plus : ''}</span>`;
 function itemTip(id, plus, r) {
   const it = ITEMS[id], m = RAR[r || 0].m * (1 + 0.08 * (plus || 0)); let h = `<b>${it.icon} ${gearName(id, r, plus)}</b>`;
@@ -101,7 +110,9 @@ function itemTip(id, plus, r) {
   if (it.atk) h += `<br>Angriff: ${Math.round(it.atk * m)}`;
   if (it.def) h += `<br>Verteidigung: ${Math.round(it.def * m)}`;
   if (it.bonus) { const b = it.bonus, L = []; if (b.atk) L.push(`+${Math.round((b.atk - 1) * 100)} % Angriff`); if (b.crit) L.push(`+${Math.round(b.crit * 100)} % kritische Treffer`); if (b.aspd) L.push(`+${Math.round((b.aspd - 1) * 100)} % Angriffstempo`); if (b.hp) L.push(`+${Math.round((b.hp - 1) * 100)} % Leben`); if (b.leech) L.push(`Heilt dich um ${Math.round(b.leech * 100)} % des verursachten Schadens`); h += `<br><span style="color:${RAR[it.fr].col}">${L.join('<br>')}</span>`; }
-  if (ARMOR.includes(it.type)) h += `<br><span class="muted">Set-Teil (${RAR[r || 0].name}): 4 Teile im selben Grad geben einen Bonus</span>`;
+  if (it.hpAdd) h += `<br>Leben: +${Math.round(it.hpAdd * m)}`;
+  if (ARMOR.includes(it.type)) h += `<br><span class="muted">${SETS[it.cls || p.cls].armor.name}: 4 Teile im selben Grad geben einen Bonus</span>`;
+  if (it.acc) h += `<br><span class="muted">Kollektion ${SETS[it.cls].acc.name}: alle 5 Accessoires im selben Grad geben einen Bonus</span>`;
   if (it.hp) h += `<br>Stellt ${it.hp} Leben her`; if (it.mp) h += `<br>Stellt ${it.mp} Mana her`;
   if (it.speed) h += `<br>Fluggeschwindigkeit: ${it.speed}`;
   if (it.cls) h += `<br>Klasse: ${CLASSES[it.cls].name}`; if (it.lvl > 1) h += `<br>Ab Stufe ${it.lvl}`;
@@ -110,7 +121,7 @@ function itemTip(id, plus, r) {
 }
 const sellPrice = (id, r) => ITEMS[id].type === 'misc' ? ITEMS[id].price : Math.round(ITEMS[id].price * 0.4 * (isGear(id) ? RAR[r || 0].sell : 1));
 // Beste zur Klasse passende Waffe/Rüstung bis zu einer Stufe
-function gearFor(type, lvl) { let best = null; for (const id in ITEMS) { const it = ITEMS[id]; if (it.type === type && !it.fr && (!it.cls || it.cls === p.cls) && it.lvl <= lvl && (!best || it.lvl > ITEMS[best].lvl || (it.lvl === ITEMS[best].lvl && it.cls))) best = id; } return best; }
+function gearFor(type, lvl) { let best = null; for (const id in ITEMS) { const it = ITEMS[id]; if (it.type === type && !it.fr && !it.old && (!it.cls || it.cls === p.cls) && it.lvl <= lvl && (!best || it.lvl > ITEMS[best].lvl || (it.lvl === ITEMS[best].lvl && it.cls))) best = id; } return best; }
 function rollRarity(boss) { if (boss) return Math.random() < 0.25 ? 4 : Math.random() < 0.5 ? 3 : 2; let t = Math.random() * 100; for (let i = 0; i < RAR.length; i++) { t -= RAR[i].w; if (t <= 0) return i; } return 0; }
 const tipEl = $('#tip');
 document.addEventListener('pointermove', e => {
@@ -137,7 +148,8 @@ function useSlot(i) {
   if (it.type === 'misc') return log(`${it.name}: Kann beim Händler verkauft werden.`);
   if ((it.lvl || 1) > p.lvl) return log(`Du brauchst Stufe ${it.lvl} für ${it.name}.`, 'r');
   if (it.cls && it.cls !== p.cls) return log(`Nur für ${CLASSES[it.cls].name}.`, 'r');
-  const slot = it.type, old = p.equip[slot]; p.equip[slot] = { id: s.id, plus: s.plus || 0, r: s.r || 0 }; p.inv.splice(i, 1);
+  let slot = it.type; if (slot === 'ring' || slot === 'ear') slot = !p.equip[slot + '1'] ? slot + '1' : !p.equip[slot + '2'] ? slot + '2' : slot + '1';
+  const old = p.equip[slot]; p.equip[slot] = { id: s.id, plus: s.plus || 0, r: s.r || 0 }; p.inv.splice(i, 1);
   if (old) p.inv.push({ id: old.id, n: 1, plus: old.plus || 0, r: old.r || 0 });
   log(`Ausgerüstet: ${it.name}`, 'p'); beep(520, 0.07, 'triangle'); refreshModel(); renderInv(); renderChar(); buildHotbar();
 }
@@ -154,8 +166,8 @@ const rarStyle = s => isGear(s.id) ? `border-color:${RAR[s.r || 0].col};box-shad
 function renderInv() {
   const b = $('#invBody'); if (!b || $('#winInv').classList.contains('hidden')) return;
   const eq = (slot, cap) => { const e = p.equip[slot]; return `<div><div class="cell" data-eq="${slot}" ${e ? `data-tip="${esc(itemTip(e.id, e.plus, e.r))}" style="${rarStyle(e)}"` : ''}>${e ? ITEMS[e.id].icon : ''}${e && e.plus ? `<span class="pl">+${e.plus}</span>` : ''}</div><div class="cap">${cap}</div></div>`; };
-  const si = setInfo(); let h = `<div class="equip">${GEAR.concat('board').map(k => eq(k, SLOTN[k])).join('')}</div>`;
-  if (si.any) h += `<div style="margin-bottom:6px;color:${RAR[si.r].col}" data-tip="${esc('<b>' + SETS[si.r].name + '</b><br>' + SETS[si.r].text + '<br><span class=muted>Alle vier Rüstungsteile müssen denselben Seltenheitsgrad haben.</span>')}">◆ ${SETS[si.r].name} ${si.n}/4${si.full ? ' – aktiv: ' + si.full.text : ''}</div>`;
+  const col = slots => slots.map(k => eq(k, SLOTN[k])).join('');
+  let h = `<div class="eqwrap"><div class="eqcol">${col(['weapon', 'board'])}</div><div class="eqmid"><div class="eqacc">${col(ACC)}</div>${setLines()}</div><div class="eqcol">${col(ARMOR)}</div></div>`;
   h += `<div class="muted" style="margin-bottom:6px">${shopOpen ? '🛒 Laden offen: Klick = <b>verkaufen</b>' : 'Klick = benutzen / ausrüsten'}</div><div class="grid">`;
   for (let i = 0; i < 36; i++) { const s = p.inv[i]; h += s ? `<div class="cell" data-i="${i}" data-tip="${esc(itemTip(s.id, s.plus, s.r))}" style="${rarStyle(s)}">${ITEMS[s.id].icon}${s.n > 1 ? `<span class="n">${s.n}</span>` : ''}${s.plus ? `<span class="pl">+${s.plus}</span>` : ''}</div>` : '<div class="cell"></div>'; }
   b.innerHTML = h + `</div><div class="row" style="margin-top:8px"><span>💰 ${p.gold.toLocaleString('de-DE')} Taler</span><span class="muted">${p.inv.length}/36</span></div>`;
@@ -173,7 +185,7 @@ function renderChar() {
   const ST = { str: 'Erhöht den Angriff von Wanderern und Klingenkämpfern.', sta: 'Mehr Leben und Verteidigung.', dex: 'Angriffstempo und kritische Treffer. Hauptwert der Waldläufer.', int: 'Mehr Mana. Hauptwert von Arkanisten und Klerikern.' };
   let h = `<div class="row"><b>${esc(p.name)}</b><span>${clsName()} · Stufe ${p.lvl}</span></div><h4>Attribute ${p.sp ? `<span style="color:#7dffb0">(${p.sp} Punkte frei)</span>` : ''}</h4>`;
   for (const k in SN) h += `<div class="row" data-tip="${ST[k]}"><span>${SN[k]}${cls().stat === k ? ' ★' : ''}</span><span>${p.stats[k]} ${p.sp ? `<button data-st="${k}">+</button>` : ''}</span></div>`;
-  h += `${setInfo().full ? `<div style="color:${RAR[setInfo().r].col}">◆ ${setInfo().full.name} aktiv: ${setInfo().full.text}</div>` : ''}<h4>Kampfwerte</h4><div class="row"><span>Angriff</span><span>${Math.round(atkPower())}</span></div><div class="row"><span>Verteidigung</span><span>${Math.round(defense())}</span></div><div class="row"><span>Kritische Treffer</span><span>${Math.round(critChance() * 100)} %</span></div><div class="row"><span>Angriffe pro Sekunde</span><span>${(1 / atkInterval()).toFixed(2)}</span></div><h4>Fertigkeiten</h4>`;
+  h += `${setLines()}<h4>Kampfwerte</h4><div class="row"><span>Angriff</span><span>${Math.round(atkPower())}</span></div><div class="row"><span>Verteidigung</span><span>${Math.round(defense())}</span></div><div class="row"><span>Kritische Treffer</span><span>${Math.round(critChance() * 100)} %</span></div><div class="row"><span>Angriffe pro Sekunde</span><span>${(1 / atkInterval()).toFixed(2)}</span></div><h4>Fertigkeiten</h4>`;
   for (const k of mySkills()) { const s = SKILLS[k], ok = p.lvl >= s.lvl; h += `<div class="row" style="${ok ? '' : 'opacity:.5'}"><span>${s.icon} <b>${s.name}</b><br><span class="muted">${s.desc} · ${s.mp} MP</span></span><span>${ok ? '✔' : 'St. ' + s.lvl}</span></div>`; }
   if (p.cls === 'wanderer') h += `<div class="muted" style="margin-top:6px">Ab Stufe 10 kannst du bei Meisterin Kaela eine Klasse wählen.</div>`;
   else if (!p.spec) h += `<div class="muted" style="margin-top:6px">Ab Stufe 60 bietet dir Meisterin Kaela eine zweite Klassenstufe mit drei neuen Fertigkeiten.</div>`;
@@ -204,11 +216,11 @@ const portals = [];
 function buildDungeons() {
   const mk = (x, y, z, col, name, sub, o) => { const g = GFX.portal(col); g.position.set(x, y, z); g.rotation.y = o.ry || 0; const q = Object.assign({ portal: true, x, y, z, name, role: sub }, o); q.pick = addPick(g, 2.6, 4.6, 5.4, q, 'npc'); const l = document.createElement('div'); l.className = 'lbl'; l.innerHTML = `${name}<small>${sub}</small>`; $('#labels').appendChild(l); q.lbl = l; portals.push(q); return q; };
   DUN.forEach((d, i) => {
-    GFX.dungeon(d); const a = 0.98 + i * Math.PI / 2, x = Math.cos(a) * 58, z = Math.sin(a) * 58; d.px = x; d.pz = z;
+    d.gates = GFX.dungeon(d); d.locks = []; const a = 0.98 + i * Math.PI / 2, x = Math.cos(a) * 58, z = Math.sin(a) * 58; d.px = x; d.pz = z;
     mk(x, terrainH(x, z), z, d.glow, d.name, `Dungeon · Stufe ${d.lvl}–${d.max}`, { enter: d, ry: Math.atan2(-x, -z) });
     const r0 = d.rooms[0], rb = d.rooms[4]; mk(r0.x, d.y, r0.z - 9, 0x9ff0ff, 'Ausgang', 'zurück nach Luminhafen', { exit: d }); mk(rb.x, d.y, rb.z + 27, 0x9ff0ff, 'Ausgang', 'zurück nach Luminhafen', { exit: d });
-    d.mobs.forEach((id, k) => { const r = d.rooms[k + 1]; for (let n = 0; n < 6; n++) spawnMob(id, { x: r.x, z: r.z, r: r.r - 3, y: d.y, isl: true }); });
-    spawnMob(d.boss, { x: rb.x, z: rb.z, r: rb.r - 3, y: d.y, isl: true });
+    d.mobs.forEach((id, k) => { const r = d.rooms[k + 1]; for (let n = 0; n < 6; n++) spawnMob(id, { x: r.x, z: r.z, r: r.r - 3, y: d.y, isl: true, dun: d, ri: k + 1 }); });
+    spawnMob(d.boss, { x: rb.x, z: rb.z, r: rb.r - 3, y: d.y, isl: true, dun: d, ri: 4 });
   });
 }
 function usePortal(q) {
@@ -226,7 +238,7 @@ function openNpc(n) {
     else if (questDone()) h = `<h4>${q.name}</h4>Wunderbar! Du hast es geschafft. Hier ist deine Belohnung:<br><b>${rewardText(q)}</b><div class="npcbtns"><button data-act="finish">Quest abschließen</button></div>`;
     else h = `<h4>${q.name}</h4>${q.text}<h4>Fortschritt</h4>${questGoal(q)}: <b>${questProg()} / ${q.n}</b>`;
   } else if (n.id === 'tessa') {
-    const ids = Object.keys(ITEMS).filter(id => { const it = ITEMS[id]; return it.type === 'use' || (isGear(id) && !it.fr && (!it.cls || it.cls === p.cls) && it.lvl <= p.lvl + 9 && it.lvl >= p.lvl - 16); });
+    const ids = Object.keys(ITEMS).filter(id => { const it = ITEMS[id]; return it.type === 'use' || (isGear(id) && !it.fr && !it.acc && !it.old && (!it.cls || it.cls === p.cls) && it.lvl <= p.lvl + 9 && it.lvl >= p.lvl - 16); });
     h = `Willkommen! Sieh dich um. <span class="muted">(Zum Verkaufen im Inventar auf einen Gegenstand klicken.)</span><div style="margin-top:8px">${shopHtml(ids)}</div>`;
   } else if (n.id === 'ivo') {
     h = `Der Himmel ruft! Rüste ein Flugbrett aus und drücke <b>F</b>, um abzuheben. <b>Leertaste</b> steigt, <b>X</b> sinkt. Die Himmelsinseln liegen im Südosten.<div style="margin-top:8px">${shopHtml(['brett1', 'brett2'])}</div>`;
@@ -279,7 +291,7 @@ document.querySelectorAll('.win .x').forEach(x => x.addEventListener('click', ()
 document.querySelectorAll('#menu button').forEach(b => b.addEventListener('click', () => toggleWin(b.dataset.win)));
 const HELP = `<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> laufen · <b>Klick auf den Boden</b> läuft dorthin · <kbd>Leertaste</kbd> springen<br>
 <b>Maus ziehen</b> dreht die Kamera · <b>Mausrad</b> zoomt<br>
-<b>Klick auf Monster</b> wählt es aus, <b>zweiter Klick</b> oder <kbd>1</kbd> greift an · <kbd>Tab</kbd> nächstes Ziel<br>
+Monster mit <b style="color:#ff6a5a">rotem Namen</b> greifen von selbst an. <b>Klick auf Monster</b> wählt es aus, <b>zweiter Klick</b> oder <kbd>1</kbd> greift an · <kbd>Tab</kbd> nächstes Ziel<br>
 <kbd>2</kbd>–<kbd>8</kbd> Fertigkeiten · <kbd>9</kbd> Heiltrank · <kbd>0</kbd> Manatrank<br>
 <kbd>F</kbd> fliegen (Flugbrett nötig) – <kbd>Leertaste</kbd> steigen, <kbd>X</kbd> sinken<br>
 <kbd>C</kbd> Charakter · <kbd>I</kbd> Inventar · <kbd>L</kbd> Quests · <kbd>H</kbd> Hilfe · <kbd>Esc</kbd> schließen<br>
@@ -379,7 +391,7 @@ function gainExp(n) {
   if (up) { p.hp = maxHP(); p.mp = maxMP(); levelFx(); center(`Stufe ${p.lvl}!`, '+3 Attributpunkte (C)'); log(`Stufenaufstieg! Du bist jetzt Stufe ${p.lvl}.`, 'g'); if (p.lvl === 10 && p.cls === 'wanderer') log('Meisterin Kaela im Dorf kann dir jetzt eine Klasse geben!', 'g'); if (p.lvl >= 60 && !p.spec && p.cls !== 'wanderer') log('Stufe 60! Meisterin Kaela bietet dir eine zweite Klassenstufe an.', 'g'); buildHotbar(); renderChar(); renderQuests(); save(); }
 }
 function killMob(m) {
-  m.dead = true; m.g.visible = false; m.respawn = m.def.boss ? 150 : m.def.elite ? rnd(40, 55) : rnd(9, 14); if (p.target === m) setTarget(null);
+  m.dead = true; m.g.visible = false; m.respawn = m.def.boss ? 150 : m.def.elite ? rnd(160, 200) : rnd(9, 14); if (p.target === m) setTarget(null);
   fx.kill(m.x, mobCenterY(m), m.z, m.def.color, Math.min(2.6, m.def.scale)); beep(140, 0.18, 'sawtooth', 0.05, -80);
   const diff = p.lvl - m.def.lvl; gainExp(Math.max(1, Math.round(m.def.exp * clamp(1 - (diff - 3) * 0.15, 0.1, 1))));
   dropLoot(m, { gold: rint(m.def.gold[0], m.def.gold[1]) });
@@ -387,6 +399,8 @@ function killMob(m) {
   if (Math.random() < (m.def.boss ? 1 : 0.025 + m.def.lvl * 0.002)) dropLoot(m, { item: 'splitter', n: m.def.boss ? 3 : 1 });
   if (Math.random() < 0.08) dropLoot(m, { item: m.def.lvl >= 70 ? 'hp4' : m.def.lvl >= 40 ? 'hp3' : m.def.lvl >= 15 ? 'hp2' : 'hp1' });
   for (let i = 0, n = m.def.boss ? 3 : Math.random() < (m.def.elite ? 0.16 : 0.07) ? 1 : 0; i < n; i++) { const id = gearFor(GEAR[Math.floor(Math.random() * GEAR.length)], m.def.lvl + 2); if (id) dropLoot(m, { item: id, r: m.def.boss ? rollRarity(true) : Math.max(m.def.elite && Math.random() < 0.4 ? 1 : 0, rollRarity(false)) }); }
+  // Accessoires: nur von Dungeon-Monstern und Bossen
+  if (p.cls !== 'wanderer' && (m.def.boss || (m.def.elite && Math.random() < 0.08 * (WRGAME.luck || 1)))) for (let i = 0, n = m.def.boss ? 2 : 1; i < n; i++) { const tier = [80, 60, 40, 20].findIndex(L => L <= m.def.lvl), id = tier < 0 ? null : 'x_' + 'ren'[Math.floor(Math.random() * 3)] + '_' + p.cls + (3 - tier); if (id && ITEMS[id]) dropLoot(m, { item: id, r: rollRarity(m.def.boss) }); }
   // Legendäre (Boss ab Stufe 60) und blutige Waffen (Boss ab Stufe 80): extrem selten
   if (m.def.boss && p.cls !== 'wanderer') { const special = pre => { let best = null; for (const id in ITEMS) { const it = ITEMS[id]; if (id.startsWith(pre + p.cls) && it.lvl <= m.def.lvl && (!best || it.lvl > ITEMS[best].lvl)) best = id; } return best; };
     const q = Math.random() / (WRGAME.luck || 1), id = m.def.lvl >= 80 && q < 0.025 ? special('b_') : m.def.lvl >= 60 && q < 0.075 ? special('l_') : null; if (id) dropLoot(m, { item: id, r: ITEMS[id].fr }); }
@@ -430,21 +444,21 @@ function placeMob(m) { const s = m.def.boss ? { x: m.home.x, z: m.home.z } : ran
 function moveMob(m, tx, tz, spd, dt) {
   const dx = tx - m.x, dz = tz - m.z, d = Math.hypot(dx, dz); if (d < 0.05) return true;
   const st = Math.min(d, spd * dt), nx = m.x + dx / d * st, nz = m.z + dz / d * st;
-  if (m.home.isl) { if (Math.hypot(nx - m.home.x, nz - m.home.z) > m.home.r - 2) return true; } else if (terrainH(nx, nz) < -2.4) return true;
+  if (m.home.dun) { if (!dunFloor(m.home.dun, nx, nz, 0.4)) return true; } else if (m.home.isl) { if (Math.hypot(nx - m.home.x, nz - m.home.z) > m.home.r - 2) return true; } else if (terrainH(nx, nz) < -2.4) return true;
   m.x = nx; m.z = nz; m.moving = true; m.rot = Math.atan2(dx, dz); if (!m.home.isl) m.y = terrainH(nx, nz); return d - st < 0.1;
 }
 function updateMob(m, dt) {
   if (m.dead) { m.respawn -= dt; if (m.respawn <= 0) { m.dead = false; m.g.visible = true; placeMob(m); } return; }
   const dx = p.x - m.x, dz = p.z - m.z, d = Math.hypot(dx, dz); m.g.visible = d < 240; m.moving = false; if (d > 190 && m.state === 'idle') return;
   m.animT += dt;
-  const reachable = !p.dead && Math.abs(p.y - m.y) < 6, spd = m.def.speed * (m.slow > 0 ? 0.45 : 1); if (m.slow > 0) m.slow -= dt;
+  const reachable = !p.dead && Math.abs(p.y - m.y) < 6, dn = m.home.dun, spd = m.def.speed * (dn ? 1.35 : 1) * (m.slow > 0 ? 0.45 : 1); if (m.slow > 0) m.slow -= dt;
   if (m.stun > 0) m.stun -= dt;
   else if (m.state === 'idle') {
-    if (m.def.aggro && reachable && d < (m.def.boss ? 28 : 13)) m.state = 'chase';
+    if (m.def.aggro && reachable && d < (m.def.boss ? 30 : dn ? 24 : 13) && (!dn || p.dun === dn)) m.state = 'chase';
     else if (!m.def.boss) { m.wanderT -= dt; if (m.wanderT <= 0) { m.wanderT = rnd(3, 8); m.tx = m.sx + rnd(-7, 7); m.tz = m.sz + rnd(-7, 7); } moveMob(m, m.tx, m.tz, spd * 0.35, dt); }
   } else if (m.state === 'chase') {
-    if (!reachable || Math.hypot(m.x - m.sx, m.z - m.sz) > 55 || d > 65) m.state = 'return';
-    else { const rng = 1.5 + m.def.scale * 0.9; if (d > rng) moveMob(m, p.x, p.z, spd, dt); m.rot = Math.atan2(dx, dz); m.atkT -= dt; if (d <= rng + 0.6 && m.atkT <= 0) { m.atkT = m.def.boss ? 2.2 : 1.7; m.lunge = 0.3; hurtPlayer(m); if (m.def.boss) ring(m.x, m.y, m.z, 0x9fe8ff, 12, 0.5); } }
+    if (!reachable || (dn ? p.dun !== dn : Math.hypot(m.x - m.sx, m.z - m.sz) > 55 || d > 65)) m.state = 'return';
+    else { const rng = 1.5 + m.def.scale * 0.9; if (d > rng) { const ox = m.x, oz = m.z; moveMob(m, p.x, p.z, spd, dt); if (dn && m.x === ox && m.z === oz) { const mi = dunIdx(dn, m.x, m.z), pi = dunIdx(dn, p.x, p.z), w = dn.rooms[clamp(pi > mi ? Math.floor(mi + 1) : Math.ceil(mi - 1), 0, 4)]; moveMob(m, w.x, w.z, spd, dt); } } m.rot = Math.atan2(dx, dz); m.atkT -= dt; if (d <= rng + 0.6 && m.atkT <= 0) { m.atkT = m.def.boss ? 2.2 : 1.7; m.lunge = 0.3; hurtPlayer(m); if (m.def.boss) ring(m.x, m.y, m.z, 0x9fe8ff, 12, 0.5); } }
   } else if (m.state === 'return') { m.hp = Math.min(m.def.hp, m.hp + m.def.hp * 0.3 * dt); if (moveMob(m, m.sx, m.sz, spd * 1.4, dt)) m.state = 'idle'; }
   // Animation
   if (m.hitT > 0) m.hitT -= dt; if (m.lunge > 0) m.lunge -= dt;
@@ -504,7 +518,8 @@ function updatePlayer(dt) {
   if (ml > 0.01) {
     const board = p.equip.board && ITEMS[p.equip.board.id], spd = p.flying ? board.speed : 9 * mod('spd') * setB('spd', 1), st = spd * dt;
     let nx = p.x + mx / ml * st, nz = p.z + mz / ml * st; const dd = Math.hypot(nx, nz); if (dd > 470 && !p.dun) { nx *= 470 / dd; nz *= 470 / dd; }
-    const blocked = p.dun ? !dunFloor(p.dun, nx, nz) : !p.flying && !islandAt(nx, nz) && terrainH(nx, nz) < WATER - 0.5 && p.y < 20;
+    if (p.dun && !dunFloor(p.dun, nx, nz, 0, p.dun.locks) && dunFloor(p.dun, nx, nz) && time - lockMsg > 3) { lockMsg = time; log('Eine Barriere versperrt den Weg – besiege zuerst alle Monster in diesem Raum!', 'r'); beep(150, 0.2, 'sawtooth', 0.04); }
+    const blocked = p.dun ? !dunFloor(p.dun, nx, nz, 0, p.dun.locks) : !p.flying && !islandAt(nx, nz) && terrainH(nx, nz) < WATER - 0.5 && p.y < 20;
     if (!p.flying || p.y < 14) for (const c of GFX.colliders) { const cd = Math.hypot(nx - c.x, nz - c.z); if (cd < c.r) { nx = c.x + (nx - c.x) / cd * c.r; nz = c.z + (nz - c.z) / cd * c.r; } }
     if (!blocked) { p.x = nx; p.z = nz; moving = true; } else p.moveTo = null;
     let dr = Math.atan2(mx, mz) - p.rot; dr = Math.atan2(Math.sin(dr), Math.cos(dr)); p.rot += dr * Math.min(1, dt * 14);
@@ -551,13 +566,13 @@ function updateProj(dt) {
   }
 }
 /* ---------- HUD ---------- */
-let hudT = 0, mapT = 0;
+let hudT = 0, mapT = 0; const mobLbl = []; for (let i = 0; i < 14; i++) { const el = document.createElement('div'); el.className = 'lbl mlbl'; el.style.display = 'none'; $('#labels').appendChild(el); mobLbl.push({ el, on: false, tx: '' }); }
 function updateHud(dt) {
   const mh = maxHP(), mm = maxMP();
   $('#hpfill').style.width = clamp(p.hp / mh * 100, 0, 100) + '%'; $('#hptxt').textContent = `${Math.ceil(p.hp)} / ${mh}`;
   $('#mpfill').style.width = clamp(p.mp / mm * 100, 0, 100) + '%'; $('#mptxt').textContent = `${Math.floor(p.mp)} / ${mm}`;
   const t = p.target; $('#tframe').classList.toggle('hidden', !t);
-  if (t) { $('#tname').textContent = t.def.name + (t.def.boss ? ' 👑' : ''); const dl = t.def.lvl - p.lvl; $('#tlvl').textContent = 'St. ' + t.def.lvl; $('#tlvl').style.color = dl >= 4 ? '#ff6464' : dl >= 1 ? '#ffb04a' : dl > -4 ? '#ffd978' : '#9fb0d0'; $('#thpfill').style.width = clamp(t.hp / t.def.hp * 100, 0, 100) + '%'; $('#thptxt').textContent = `${Math.max(0, Math.ceil(t.hp))} / ${t.def.hp}`; selRing.visible = true; selRing.position.set(t.x, t.y + 0.3, t.z); selRing.scale.setScalar(3.4 * t.def.scale); selRing.material.color.setHex(t.def.aggro ? 0xff5040 : 0xffc040); } else selRing.visible = false;
+  if (t) { $('#tname').textContent = t.def.name + (t.def.boss ? ' 👑' : ''); $('#tname').style.color = t.def.aggro ? '#ff6a5a' : ''; const dl = t.def.lvl - p.lvl; $('#tlvl').textContent = 'St. ' + t.def.lvl; $('#tlvl').style.color = dl >= 4 ? '#ff6464' : dl >= 1 ? '#ffb04a' : dl > -4 ? '#ffd978' : '#9fb0d0'; $('#thpfill').style.width = clamp(t.hp / t.def.hp * 100, 0, 100) + '%'; $('#thptxt').textContent = `${Math.max(0, Math.ceil(t.hp))} / ${t.def.hp}`; selRing.visible = true; selRing.position.set(t.x, t.y + 0.3, t.z); selRing.scale.setScalar(3.4 * t.def.scale); selRing.material.color.setHex(t.def.aggro ? 0xff5040 : 0xffc040); } else selRing.visible = false;
   updateHotbar();
   hudT -= dt; if (hudT <= 0) {
     hudT = 0.25; $('#pname').textContent = p.name; $('#plvl').textContent = `${clsName()} · St. ${p.lvl}`;
@@ -569,6 +584,10 @@ function updateHud(dt) {
     if (zn !== zoneName) { zoneName = zn; const zz = ZONES.find(q => q.name === zn); zoneKey = p.dun ? p.dun.amb : zz ? zz.id : zn === 'Luminhafen' ? 'town' : isl ? 'isl' : ''; $('#zone').textContent = zn; if (zn !== 'Wildnis') { const z = ZONES.find(q => q.name === zn); center(zn, z ? `Monster ab Stufe ${MOBS[z.mobs[0][0]].lvl}` : p.dun ? `Dungeon · Stufe ${p.dun.lvl}–${p.dun.max}` : isl ? `Monster ab Stufe ${MOBS[isl.mobs[0][0]].lvl}` : 'Sicheres Dorf'); } }
     for (const n of npcs) { const mk = npcMark(n), html = `${mk ? `<span class="qm">${mk}</span>` : ''}${n.name}<small>${n.role}</small>`; if (n._h !== html) { n._h = html; n.lbl.innerHTML = html; } }
   }
+  if (p.dun) { const d = p.dun, alive = [0, 0, 0, 0, 0], pi = dunIdx(d, p.x, p.z); for (const m of mobs) if (m.home.dun === d && !m.dead) alive[m.home.ri]++; for (let i = 1; i < 4; i++) { d.locks[i] = alive[i] > 0 && pi <= i; d.gates[i].visible = alive[i] > 0; } }
+  // Namen über Monstern in der Nähe: rot = greift von selbst an
+  const near = []; for (const m of mobs) { if (m.dead) continue; const dd = Math.hypot(m.x - p.x, m.z - p.z); if (dd < 42 && Math.abs(m.y - p.y) < 16) near.push([dd, m]); } near.sort((a, b) => a[0] - b[0]);
+  for (let i = 0; i < mobLbl.length; i++) { const l = mobLbl[i], q = near[i], s = q ? toScreen(q[1].x, mobCenterY(q[1]) + 1.7 * q[1].def.scale, q[1].z) : null; if (!s) { if (l.on) { l.el.style.display = 'none'; l.on = false; } continue; } const m = q[1], tx = `${m.def.boss ? '👑 ' : ''}${m.def.name} · St. ${m.def.lvl}`; if (l.tx !== tx) { l.tx = tx; l.el.textContent = tx; l.el.style.color = m.def.aggro ? '#ff5a48' : '#fff3c4'; } if (!l.on) { l.el.style.display = ''; l.on = true; } l.el.style.left = s.x + 'px'; l.el.style.top = s.y + 'px'; }
   for (const n of portals) { const s = Math.hypot(n.x - p.x, n.z - p.z) < 110 ? toScreen(n.x, n.y + 7.6, n.z) : null; if (s) { n.lbl.style.display = ''; n.lbl.style.left = s.x + 'px'; n.lbl.style.top = s.y + 'px'; } else n.lbl.style.display = 'none'; }
   for (const n of npcs) { const s = Math.hypot(n.x - p.x, n.z - p.z) < 90 ? toScreen(n.x, n.y + 4.0, n.z) : null; if (s) { n.lbl.style.display = ''; n.lbl.style.left = s.x + 'px'; n.lbl.style.top = s.y + 'px'; } else n.lbl.style.display = 'none'; }
   mapT -= dt; if (mapT <= 0) { mapT = 0.12; drawMap(); }
@@ -653,7 +672,7 @@ buildNpcs(); buildDungeons();
 for (const z of ZONES) for (const [id, n] of z.mobs) for (let i = 0; i < n; i++) spawnMob(id, { x: z.x, z: z.z, r: z.r });
 for (const i of ISLANDS) for (const [id, n] of i.mobs) for (let k = 0; k < n; k++) spawnMob(id, { x: i.x, z: i.z, r: i.r, y: i.y, isl: true });
 
-const clock = new THREE.Clock(); let time = 0, camCur = 14; const camRay = new THREE.Raycaster(), camDir = new THREE.Vector3(), camFrom = new THREE.Vector3();
+let lockMsg = -9; const clock = new THREE.Clock(); let time = 0, camCur = 14; const camRay = new THREE.Raycaster(), camDir = new THREE.Vector3(), camFrom = new THREE.Vector3();
 function frame() {
   requestAnimationFrame(frame); const dt = Math.min(0.05, clock.getDelta()); time += dt; runTimers(dt);
   let tx = 0, ty = 6, tz = 0;

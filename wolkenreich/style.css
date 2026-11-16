@@ -117,3 +117,13 @@ button.big{font-size:18px;padding:11px 26px;font-weight:bold}
   #menu{bottom:84px;flex-direction:column}
 }
 @media (max-width:700px){.pf-top{flex-direction:column;gap:1px}.win{left:3vw!important;right:auto!important;margin-left:0!important;top:70px!important}}
+
+#winInv{width:356px}
+.eqwrap{display:flex;gap:8px;margin-bottom:8px;align-items:flex-start}
+.eqcol{display:flex;flex-direction:column;gap:3px;width:52px;flex:none}
+.eqcol .cell{width:46px;margin:0 auto}
+.eqmid{flex:1;min-width:0}
+.eqacc{display:flex;gap:3px;justify-content:center;margin-bottom:6px}
+.eqacc .cell{width:36px;font-size:17px}
+.eqwrap .cap{font-size:9px;text-align:center;color:#bcd;line-height:1.2}
+.mlbl{font-size:12px;font-weight:bold}
