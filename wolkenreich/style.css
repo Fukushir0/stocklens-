@@ -127,3 +127,7 @@ button.big{font-size:18px;padding:11px 26px;font-weight:bold}
 .eqacc .cell{width:33px;font-size:16px}
 .eqwrap .cap{font-size:9px;text-align:center;color:#bcd;line-height:1.2}
 .mlbl{font-size:12px;font-weight:bold}
+
+#winMap{left:50%;top:50%;transform:translate(-50%,-50%);width:min(640px,96vw);max-height:96vh;z-index:5}
+#bigmap{display:block;width:100%;height:auto;max-height:calc(96vh - 110px);object-fit:contain;border-radius:8px;border:1px solid #d9b765;background:#16305a}
+.maplegend{margin-top:6px;font-size:12px}

@@ -134,6 +134,10 @@ button.big{font-size:18px;padding:11px 26px;font-weight:bold}
 .eqacc .cell{width:33px;font-size:16px}
 .eqwrap .cap{font-size:9px;text-align:center;color:#bcd;line-height:1.2}
 .mlbl{font-size:12px;font-weight:bold}
+
+#winMap{left:50%;top:50%;transform:translate(-50%,-50%);width:min(640px,96vw);max-height:96vh;z-index:5}
+#bigmap{display:block;width:100%;height:auto;max-height:calc(96vh - 110px);object-fit:contain;border-radius:8px;border:1px solid #d9b765;background:#16305a}
+.maplegend{margin-top:6px;font-size:12px}
 </style>
 </head>
 <body>
@@ -171,6 +175,7 @@ button.big{font-size:18px;padding:11px 26px;font-weight:bold}
     <button data-win="winChar" title="Charakter (C)">👤</button>
     <button data-win="winInv" title="Inventar (I)">🎒</button>
     <button data-win="winQuest" title="Quests (L)">📜</button>
+    <button data-win="winMap" title="Karte (M)">🗺️</button>
     <button data-win="winHelp" title="Hilfe (H)">❔</button>
   </div>
 
@@ -178,6 +183,7 @@ button.big{font-size:18px;padding:11px 26px;font-weight:bold}
   <div id="winInv" class="win panel hidden"><div class="wt">Inventar<span class="x">✕</span></div><div class="wb" id="invBody"></div></div>
   <div id="winQuest" class="win panel hidden"><div class="wt">Quests<span class="x">✕</span></div><div class="wb" id="questBody"></div></div>
   <div id="winNpc" class="win panel hidden"><div class="wt"><span id="npcTitle"></span><span class="x">✕</span></div><div class="wb" id="npcBody"></div></div>
+  <div id="winMap" class="win panel hidden"><div class="wt">Weltkarte<span class="x">✕</span></div><div class="wb"><canvas id="bigmap" width="600" height="600"></canvas><div class="muted maplegend">🔺 du · 🏠 Dorf · ⛺ Station (? = noch nicht entdeckt) · <span style="color:#7ff0ff">●</span> Dungeon-Portal · ☁ Himmelsinsel (nur per Flug) · gelber Ring = Questziel. Reisen: Wegstein anklicken.</div></div></div>
   <div id="winHelp" class="win panel hidden"><div class="wt">Steuerung<span class="x">✕</span></div><div class="wb helpBody"></div></div>
 </div>
 
@@ -446,6 +452,19 @@ const WR = (() => {
     { id: 'spalt',  name: 'Leerenspalt',  lvl: 80, max: 100, col: 0x5a4a8a, wall: 0x3a2a5a, glow: 0xb060ff, amb: 'ruinen', mobs: ['d4a', 'd4b', 'd4c'], boss: 'd4boss', mood: { top: 0x040208, mid: 0x1c0c3a, hor: 0x4a2a7a, fog: 0x1c1030, sun: 0.9, hemi: 0.5, water: 0x1a0c3a } },
   ];
 
+  // Orte: Dörfer (Händler, Schmied, Wegstein) und kleine Stationen (Händler, Wegstein). Wegsteine erlauben Schnellreisen.
+  const PLACES = [
+    { id: 'luminhafen', name: 'Luminhafen',  type: 'dorf',    x: 0,    z: 0,    r: 80 },
+    { id: 'birkenau',   name: 'Birkenau',    type: 'dorf',    x: -124, z: 154,  r: 30, npcs: [['tessa', 'Händlerin Runa', 0xd6a53a], ['borin', 'Schmied Tjark', 0x6a3a22]] },
+    { id: 'aschenfurt', name: 'Aschenfurt',  type: 'dorf',    x: 80,   z: -122, r: 30, npcs: [['tessa', 'Händler Oswin', 0x3a3a3a], ['borin', 'Schmiedin Hedda', 0xd6453c]] },
+    { id: 'pilzrast',   name: 'Pilzrast',    type: 'station', x: 112,  z: 92,   r: 13, npcs: [['tessa', 'Sammlerin Ilve', 0x8e5bd0]] },
+    { id: 'glutwacht',  name: 'Glutwacht',   type: 'station', x: 152,  z: -108, r: 13, npcs: [['tessa', 'Wachposten Bran', 0x8a4b20]] },
+    { id: 'moorsteg',   name: 'Moorsteg',    type: 'station', x: -20,  z: 208,  r: 13, npcs: [['tessa', 'Fischerin Malin', 0xf2d16b]] },
+    { id: 'oedniswacht',name: 'Ödniswacht',  type: 'station', x: -250, z: -28,  r: 13, npcs: [['tessa', 'Späher Corvin', 0xeeeeee]] },
+    { id: 'schlundlager',name: 'Schlundlager', type: 'station', x: -142, z: -294, r: 13, npcs: [['tessa', 'Köhlerin Asa', 0x2a2a2a]] },
+    { id: 'ostkap',     name: 'Ostkap',      type: 'station', x: 292,  z: -76,  r: 13, npcs: [['tessa', 'Flugwart Enno', 0x3c6ad6]] },
+  ];
+
   const NPCS = [
     { id: 'mira',  name: 'Älteste Mira',   role: 'Quests',        x: 6,   z: 10,  color: 0xb46ad6, hair: 0xeeeeee },
     { id: 'tessa', name: 'Händlerin Tessa', role: 'Laden',        x: -12, z: 6,   color: 0xe08a3a, hair: 0x8a4b20 },
@@ -491,7 +510,7 @@ const WR = (() => {
   const MAXLVL = 100;
   const expNeed = l => Math.floor(40 * Math.pow(l, 1.9));
 
-  return { CLASSES, SPECS, SKILLS, RAR, SETS, SETF, UPCHANCE, DUNGEONS, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed };
+  return { CLASSES, SPECS, SKILLS, RAR, SETS, SETF, UPCHANCE, DUNGEONS, PLACES, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed };
 })();
 
 </script>
@@ -668,7 +687,7 @@ function makeMaterials() {
 
 /* ---------- Renderer & Szene ---------- */
 let renderer, scene, camera, sun, hemi, dome, water, env, skyMat, quality = 'hoch';
-const farIsles = [];
+const farIsles = []; let houseFn = null;
 const vegChunks = [], groundMeshes = [], anims = [], grassCells = [], clouds = [], blockers = [], colliders = [];
 const SUN = new T.Vector3(0.55, 0.72, 0.42).normalize();
 function init(canvas, e) {
@@ -713,6 +732,7 @@ function landColor(x, z, h, out) {
   for (const zn of ZONES) { const w = 1 - smooth(zn.r * 0.55, zn.r * 1.2, Math.hypot(x - zn.x, z - zn.z) + (n - 0.5) * 30); if (w > 0) c = c.map((v, k) => v + (zn.col[k] * 0.85 - v) * w); }
   const d = Math.hypot(x, z); let path = 1 - smooth(21, 27, d);
   for (const zn of ZONES) { const L = Math.hypot(zn.x, zn.z), t = clamp((x * zn.x + z * zn.z) / (L * L), 0, 1 - zn.r * 0.5 / L), pd = Math.hypot(x - zn.x * t, z - zn.z * t) + (n2 - 0.5) * 2.5; path = Math.max(path, 1 - smooth(2.2, 4.2, pd)); }
+  for (const pl of env.PLACES) if (pl.x || pl.z) { const L = Math.hypot(pl.x, pl.z), t = clamp((x * pl.x + z * pl.z) / (L * L), 0, 1), pd = Math.hypot(x - pl.x * t, z - pl.z * t) + (n2 - 0.5) * 2.5; path = Math.max(path, 1 - smooth(2.2, 4.2, pd), pl.type === 'station' ? 1 - smooth(7, 11, Math.hypot(x - pl.x, z - pl.z)) : 0); }
   c = c.map((v, k) => v + ([0.56, 0.44, 0.28][k] - v) * path * 0.92);
   const e = 1.5, sl = Math.hypot(env.terrainH(x + e, z) - env.terrainH(x - e, z), env.terrainH(x, z + e) - env.terrainH(x, z - e)) / (2 * e), rk = smooth(0.42, 0.75, sl);
   c = c.map((v, k) => v + ([0.5, 0.47, 0.42][k] - v) * rk);
@@ -746,8 +766,8 @@ function buildWorld() {
   const TYPES = vegetationTypes(), list = [], add = (t, x, z, s, c, y) => list.push({ t, x, z, y: y === undefined ? terrainH(x, z) : y, s, ry: sr(0, 6.28), c });
   const tint = (a, b) => { const k = sr(a, b); return col.setRGB(k, k * sr(0.96, 1.04), k * sr(0.94, 1.02)).getHex(); };
   for (let n = 0; n < 4400; n++) {
-    const x = sr(-440, 440), z = sr(-440, 440), d = Math.hypot(x, z), h = terrainH(x, z); if (d < 44 || d > 425 || h < -1.4) continue;
-    landColor(x, z, h, cc); if (cc[3] > 0.25) continue; if (d < 75 && [0, 1, 2, 3].some(i => Math.hypot(x - Math.cos(0.98 + i * PI / 2) * 58, z - Math.sin(0.98 + i * PI / 2) * 58) < 11)) continue; const zn = zoneAt(x, z, 1.1), q = sr();
+    const x = sr(-440, 440), z = sr(-440, 440), d = Math.hypot(x, z), h = terrainH(x, z); if (d < 86 || d > 425 || h < -1.4) continue; if (env.PLACES.some(pl => Math.hypot(x - pl.x, z - pl.z) < pl.r + 5)) continue;
+    landColor(x, z, h, cc); if (cc[3] > 0.25) continue; const zn = zoneAt(x, z, 1.1), q = sr();
     if (zn === 'frost') { if (q < 0.45) add('pine', x, z, sr(0.8, 1.5), 0xdfeaf2); else if (q < 0.7) add(q < 0.58 ? 'rock' : 'rock2', x, z, sr(1, 3.6), 0xe6eef6); else if (q < 0.8) add('icecrystal', x, z, sr(0.8, 1.8)); }
     else if (zn === 'moor') { if (q < 0.3) add('dark', x, z, sr(0.7, 1.2), tint(0.7, 0.9)); else if (q < 0.5) add('shroomP', x, z, sr(0.4, 1.3)); else if (q < 0.7) add('bush', x, z, sr(0.8, 1.6), tint(0.6, 0.8)); else if (q < 0.8) add('dead', x, z, sr(0.7, 1.1)); }
     else if (zn === 'ruinen') { if (q < 0.4) add('pillar', x, z, sr(0.8, 1.5)); else if (q < 0.65) add('rock2', x, z, sr(1, 3), tint(0.8, 1)); else if (q < 0.75) add('dead', x, z, sr(0.8, 1.2)); }
@@ -771,12 +791,12 @@ function buildWorld() {
   const fMat = windify(new T.MeshStandardMaterial({ map: TX.flower, alphaTest: 0.4, roughness: 1 }), 0.25, 0);
   const CS = 80; for (let cx = -440; cx < 440; cx += CS) for (let cz = -440; cz < 440; cz += CS) {
     const G = [], F = [];
-    for (let n = 0; n < 2100; n++) { const x = cx + sr(0, CS), z = cz + sr(0, CS), h = terrainH(x, z); if (h < -1.2 || Math.hypot(x, z) < 25) continue; landColor(x, z, h, cc); if (cc[3] > 0.35 || cc[4] > 0.4) continue; const zn = zoneAt(x, z, 1.0); if ((zn === 'fels' && sr() < 0.8) || ((zn === 'glut' || zn === 'vulkan') && sr() < 0.93) || (zn === 'ruinen' && sr() < 0.7)) continue; if (n < 90 && (zn === 'wiese' || zn === '' || zn === 'hain' || zn === 'moor')) F.push([x, h, z, sr(0.9, 1.5)]); else G.push([x, h, z, sr(1.5, 2.6), sr(0.4, 0.85), cc[0], cc[1], cc[2]]); }
+    for (let n = 0; n < 2100; n++) { const x = cx + sr(0, CS), z = cz + sr(0, CS), h = terrainH(x, z); if (h < -1.2 || Math.hypot(x, z) < 25) continue; landColor(x, z, h, cc); if (cc[3] > 0.35 || cc[4] > 0.4) continue; if (env.PLACES.some(pl => pl.type === 'dorf' && pl.r < 50 && Math.hypot(x - pl.x, z - pl.z) < 13)) continue; const zn = zoneAt(x, z, 1.0); if ((zn === 'fels' && sr() < 0.8) || ((zn === 'glut' || zn === 'vulkan') && sr() < 0.93) || (zn === 'ruinen' && sr() < 0.7)) continue; if (n < 90 && (zn === 'wiese' || zn === '' || zn === 'hain' || zn === 'moor')) F.push([x, h, z, sr(0.9, 1.5)]); else G.push([x, h, z, sr(1.5, 2.6), sr(0.4, 0.85), cc[0], cc[1], cc[2]]); }
     for (const i of ISLANDS) if (i.x > cx - i.r && i.x < cx + CS + i.r && i.z > cz - i.r && i.z < cz + CS + i.r) for (let n = 0; n < 900; n++) { const x = cx + sr(0, CS), z = cz + sr(0, CS); if (Math.hypot(x - i.x, z - i.z) < i.r - 1.5) (n % 12 ? G : F).push([x, i.y, z, sr(1.1, 1.9), sr(0.45, 1.0), 0.34, 0.6, 0.24]); }
     const mk = (arr, mat, isG) => { if (!arr.length) return; const im = new T.InstancedMesh(tuft, mat, arr.length); arr.forEach((o, i) => { dm.position.set(o[0], o[1] - 0.05, o[2]); dm.rotation.set(0, sr(0, 3.14), 0); isG ? dm.scale.set(o[3], o[4], o[3]) : dm.scale.setScalar(o[3]); dm.updateMatrix(); im.setMatrixAt(i, dm.matrix); if (isG) { col.setRGB(o[5], o[6], o[7], T.SRGBColorSpace); const b = sr(1.35, 1.75); im.setColorAt(i, col.multiplyScalar(b)); } }); im.receiveShadow = true; im.userData.c = [cx + CS / 2, cz + CS / 2]; scene.add(im); grassCells.push(im); };
     mk(G, gMat, true); mk(F, fMat, false);
   }
-  buildTown();
+  buildTown(); buildPlaces(env.PLACES);
   // Wolken
   for (let k = 0; k < 30; k++) { const g = new T.Group(), n = 5 + Math.floor(sr(0, 5)), sc = sr(0.7, 1.5); for (let q = 0; q < n; q++) { const low = q % 2, s = new T.Sprite(new T.SpriteMaterial({ map: TX.soft, color: low ? 0xc9d6ea : 0xffffff, transparent: true, opacity: low ? 0.75 : 0.95, depthWrite: false, fog: false })); s.scale.set(sr(70, 120) * sc, sr(42, 66) * sc, 1); s.position.set((q - n / 2) * 30 * sc + sr(-8, 8), low ? -9 * sc : sr(0, 12) * sc, sr(-16, 16)); g.add(s); } g.position.set(sr(-1100, 1100), k < 8 ? sr(30, 52) : sr(150, 320), sr(-1100, 1100)); scene.add(g); clouds.push(g); }
   // Ferne Inseln am Horizont
@@ -819,8 +839,8 @@ function buildTown() {
   const { terrainH } = env, town = new T.Group(); scene.add(town); const Y = 1.5;
   const plaza = new T.Mesh(new T.CircleGeometry(25, 48), new T.MeshStandardMaterial({ map: TX.cobble, roughness: 0.9 })); plaza.rotation.x = -PI / 2; plaza.position.y = Y + 0.06; plaza.receiveShadow = true; town.add(plaza); groundMeshes.push(plaza);
   const roofs = [0xb8433a, 0x3f66c4, 0x3f8f52, 0xc98f2e, 0x7a4fb8, 0xa8483a];
-  for (let k = 0; k < 6; k++) {
-    const a = k / 6 * PI * 2 + 0.52, x = Math.cos(a) * 34, z = Math.sin(a) * 34, w = 9 + (k % 3), d = 8 + (k % 2) * 1.5, h = 5 + (k % 2) * 1.2, rh = w * 0.52, g = new T.Group(), ps = [];
+  houseFn = (k, x, z, ry) => {
+    const w = 9 + (k % 3), d = 8 + (k % 2) * 1.5, h = 5 + (k % 2) * 1.2, rh = w * 0.52, g = new T.Group(), ps = [];
     ps.push(pc('box', 0xa8a39a, [0, 0.5, 0], [w + 0.5, 1, d + 0.5], null, 'stone'), pc('box', 0xffffff, [0, 1 + h / 2, 0], [w, h, d], null, 'plaster'));
     ps.push(pc(roofGeo(w + 1.6, d + 1.4, rh), roofs[k], [0, 1 + h, 0], null, null, 'roof'), pc('box', 0x5a3d26, [0, 1 + h + rh, 0], [0.4, 0.4, d + 1.6], null, 'wood'));
     for (const sx of [-1, 1]) ps.push(pc('box', 0x5a3d26, [sx * (w / 2 + 0.72), 1 + h + 0.05, 0], [0.3, 0.3, d + 1.5], null, 'wood'));
@@ -830,8 +850,10 @@ function buildTown() {
     const win = (wx, wy, wz, ry) => { const q = [pc('box', 0xffe2a0, [0, 0, 0], [1.5, 1.6, 0.1], null, 'glow', { top: 0xfff6d8 }), pc('box', 0x40291a, [0, 0, 0.03], [0.12, 1.7, 0.12], null, 'wood'), pc('box', 0x40291a, [0, 0, 0.03], [1.6, 0.12, 0.12], null, 'wood'), pc('box', 0x40291a, [0, 0.87, 0.02], [1.8, 0.16, 0.2], null, 'wood'), pc('box', 0x40291a, [0, -0.87, 0.06], [1.9, 0.18, 0.4], null, 'wood'), pc('box', roofs[(k + 2) % 6], [-1.12, 0, 0.03], [0.6, 1.7, 0.1], null, 'matte'), pc('box', roofs[(k + 2) % 6], [1.12, 0, 0.03], [0.6, 1.7, 0.1], null, 'matte')]; for (let i = 0; i < 5; i++) q.push(pc('sph', [0xff6f91, 0xffd84a, 0xffffff][i % 3], [-0.7 + i * 0.35, -0.68, 0.22], 0.26, null, 'matte'), pc('sph', 0x3f8f3a, [-0.6 + i * 0.3, -0.78, 0.16], 0.3, null, 'matte')); return xf(q, [wx, wy, wz], [0, ry, 0]); };
     ps.push(win(-w * 0.3, 3.4, fz + 0.03, 0), win(w * 0.3, 3.4, fz + 0.03, 0), win(w / 2 + 0.03, 3.4, 0, PI / 2), win(-w / 2 - 0.03, 3.4, 0, -PI / 2));
     if (k % 2) ps.push(pc('box', 0xffe2a0, [0, 1 + h + rh * 0.38, fz + 0.72], [1.1, 1.1, 0.1], null, 'glow'), pc('box', 0x40291a, [0, 1 + h + rh * 0.38, fz + 0.75], [1.3, 0.12, 0.12], null, 'wood'));
-    build(g, ps).forEach(m => { m.receiveShadow = true; blockers.push(m); }); g.position.set(x, terrainH(x, z) - 0.25, z); g.rotation.y = Math.atan2(-x, -z); town.add(g); colliders.push({ x, z, r: Math.max(w, d) / 2 + 0.9 });
-  }
+    build(g, ps).forEach(m => { m.receiveShadow = true; blockers.push(m); }); g.position.set(x, terrainH(x, z) - 0.25, z); g.rotation.y = ry; town.add(g); colliders.push({ x, z, r: Math.max(w, d) / 2 + 0.9 });
+  };
+  for (let k = 0; k < 6; k++) { const a = k / 6 * PI * 2 + 0.52, x = Math.cos(a) * 34, z = Math.sin(a) * 34; houseFn(k, x, z, Math.atan2(-x, -z)); }
+  [0.55, 1.95, 2.9, 3.75, 4.7, 4.98, 6.05].forEach((a, i) => { const r = 64 + (i % 2) * 5, x = Math.cos(a) * r, z = Math.sin(a) * r; houseFn((i + 3) % 6, x, z, Math.atan2(-x, -z) + (i % 3 - 1) * 0.25); });
   // Monument mit schwebendem Kristall
   const mon = new T.Group(); mon.position.y = Y; town.add(mon); const mp = [pc('cyl', 0xb9b4a8, [0, 0.3, 0], [9, 0.6, 9], null, 'stone'), pc('cyl', 0xcac5b8, [0, 0.8, 0], [6.4, 0.5, 6.4], null, 'stone'), pc('cyl', 0xdad5c8, [0, 1.25, 0], [4, 0.5, 4], null, 'stone'), pc('cyl', 0x2a86c4, [0, 1.06, 0], [5.6, 0.06, 5.6], null, 'gloss')];
   for (let i = 0; i < 4; i++) { const a = i * PI / 2 + PI / 4, x = Math.cos(a) * 3.6, z = Math.sin(a) * 3.6; mp.push(pc('cyl', 0xd8d2c2, [x, 2.4, z], [0.7, 3.6, 0.7], null, 'stone'), pc('box', 0xc8c2b2, [x, 4.3, z], [1.1, 0.3, 1.1], null, 'stone'), pc('oct', 0x7fe4ff, [x, 5.0, z], [0.6, 1, 0.6], null, 'glow'), pc('box', 0x7fe4ff, [x * 0.92, 2.6, z * 0.92], [0.12, 1.6, 0.12], null, 'glow')); }
@@ -842,7 +864,7 @@ function buildTown() {
   // Laternen, Zäune, Stände
   const props = [];
   for (let i = 0; i < 8; i++) { const a = i / 8 * PI * 2, x = Math.cos(a) * 23, z = Math.sin(a) * 23; props.push(xf([pc('cyl', 0x2c2c34, [0, 2, 0], [0.22, 4, 0.22], null, 'metal'), pc('cyl', 0x2c2c34, [0, 0.15, 0], [0.7, 0.3, 0.7], null, 'metal'), pc('box', 0x2c2c34, [0.45, 3.9, 0], [1, 0.12, 0.12], null, 'metal'), pc('box', 0xffe2a0, [0.9, 3.45, 0], [0.5, 0.65, 0.5], null, 'glow', { top: 0xffffff }), pc('cone4', 0x2c2c34, [0.9, 3.95, 0], [0.8, 0.4, 0.8], [0, PI / 4, 0], 'metal')], [x, Y, z], [0, -a + PI, 0])); const gl = glow(0xffc870, 6, 0.5); gl.position.set(x - Math.cos(a) * 0.9, Y + 3.45, z - Math.sin(a) * 0.9); town.add(gl); }
-  for (let i = 0; i < 40; i++) { const a = i / 40 * PI * 2; if (i % 8 < 2) continue; const x = Math.cos(a) * 47, z = Math.sin(a) * 47, y = terrainH(x, z); props.push(xf([pc('cyl6', 0x7a5a3c, [0, 0.8, 0], [0.32, 1.7, 0.32], null, 'wood'), pc('box', 0x8a6a48, [0, 1.15, 3.6], [0.14, 0.24, 7.3], null, 'wood'), pc('box', 0x8a6a48, [0, 0.6, 3.6], [0.14, 0.24, 7.3], null, 'wood')], [x, y - 0.1, z], [0, -a, 0])); }
+  for (let i = 0; i < 68; i++) { const a = i / 68 * PI * 2; if (i % 8 < 2) continue; const x = Math.cos(a) * 80, z = Math.sin(a) * 80, y = terrainH(x, z); props.push(xf([pc('cyl6', 0x7a5a3c, [0, 0.8, 0], [0.32, 1.7, 0.32], null, 'wood'), pc('box', 0x8a6a48, [0, 1.15, 3.6], [0.14, 0.24, 7.3], null, 'wood'), pc('box', 0x8a6a48, [0, 0.6, 3.6], [0.14, 0.24, 7.3], null, 'wood')], [x, y - 0.1, z], [0, -a, 0])); }
   const barrel = (x, z) => xf([pc(lathe([[0.01, 0], [0.5, 0], [0.62, 0.6], [0.5, 1.2], [0.01, 1.2]], 12), 0x9a7248, null, null, null, 'wood'), pc('tor', 0x3a3a42, [0, 0.3, 0], [1.15, 1.15, 0.5], [PI / 2, 0, 0], 'metal'), pc('tor', 0x3a3a42, [0, 0.9, 0], [1.15, 1.15, 0.5], [PI / 2, 0, 0], 'metal')], [x, Y, z]);
   const crate = (x, z, s, fr) => { const q = [pc('box', 0xb08a58, [0, s / 2, 0], [s, s, s], null, 'wood')]; if (fr !== undefined) for (let i = 0; i < 7; i++) q.push(pc('sph', fr, [((i % 3) - 1) * s * 0.28, s + 0.08, (Math.floor(i / 3) - 1) * s * 0.28], s * 0.34, null, 'gloss')); return xf(q, [x, Y, z], [0, sr(0, 1), 0]); };
   // Marktstand (Tessa)
@@ -859,7 +881,41 @@ function buildTown() {
   props.push(xf([pc('box', 0x7a5a3c, [0, 0.9, 0], [3.6, 0.2, 0.3], null, 'wood'), pc('cyl6', 0x7a5a3c, [-1.7, 0.5, 0], [0.2, 1, 0.2], null, 'wood'), pc('cyl6', 0x7a5a3c, [1.7, 0.5, 0], [0.2, 1, 0.2], null, 'wood'), [0, 1, 2].map(i => [pc('sph', [0x4fc0a8, 0xffd23c, 0xe0607a][i], [-1.1 + i * 1.1, 1.5, 0.25], [0.7, 2.6, 0.14], [0.22, 0, 0], 'gloss'), pc('sph', 0xbff8ff, [-1.1 + i * 1.1, 1.5, 0.18], [0.3, 2.0, 0.08], [0.22, 0, 0], 'glow')]), pc('cyl', 0xdfe6f2, [3, 3.5, 0], [0.14, 7, 0.14], null, 'metal'), pc('cone', 0xff7a3a, [3.9, 6.6, 0], [0.7, 2, 0.7], [0, 0, -PI / 2], 'cloth', { top: 0xffffff })], [23, Y, 7], [0, -1.2, 0]));
   // Bank & Aushang (Mira)
   props.push(xf([pc('box', 0x9a7248, [0, 0.6, 0], [3, 0.16, 0.9], null, 'wood'), pc('box', 0x9a7248, [0, 1.15, -0.4], [3, 0.7, 0.12], null, 'wood'), pc('box', 0x6a4a2c, [-1.3, 0.3, 0], [0.16, 0.6, 0.8], null, 'wood'), pc('box', 0x6a4a2c, [1.3, 0.3, 0], [0.16, 0.6, 0.8], null, 'wood')], [10, Y, 15], [0, 2.6, 0]), xf([pc('cyl6', 0x6a4a2c, [-1.2, 1.3, 0], [0.2, 2.6, 0.2], null, 'wood'), pc('cyl6', 0x6a4a2c, [1.2, 1.3, 0], [0.2, 2.6, 0.2], null, 'wood'), pc('box', 0x9a7248, [0, 1.9, 0], [2.6, 1.6, 0.14], null, 'wood'), pc(roofGeo(3.2, 0.8, 0.5), 0xb8433a, [0, 2.75, 0], null, null, 'roof'), [[-0.7, 2.1, 0xfff6dc], [0.1, 1.8, 0xffe9b0], [0.75, 2.15, 0xf2efe6]].map(q => pc('box', q[2], [q[0], q[1], 0.09], [0.6, 0.75, 0.02], [0, 0, sr(-0.15, 0.15)], 'matte'))], [2, Y, 16], [0, 2.9, 0]));
+  // Erweiterung: Brunnen, Windmühle, Felder, weitere Laternen
+  props.push(xf([pc('cyl', 0x9a948a, [0, 0.6, 0], [3.2, 1.2, 3.2], null, 'stone'), pc('cyl', 0x2a86c4, [0, 1.16, 0], [2.6, 0.1, 2.6], null, 'gloss'), pc('cyl6', 0x6a4a2c, [-1.3, 2.2, 0], [0.24, 3.2, 0.24], null, 'wood'), pc('cyl6', 0x6a4a2c, [1.3, 2.2, 0], [0.24, 3.2, 0.24], null, 'wood'), pc(roofGeo(3.8, 2.4, 1.1), 0x3f66c4, [0, 3.7, 0], null, null, 'roof'), pc('cyl', 0x7a5236, [0, 3.2, 0], [0.3, 2.6, 0.3], [0, 0, PI / 2], 'wood')], [12, Y, 50])); colliders.push({ x: 12, z: 50, r: 2.6 });
+  for (const [fx0, fz0, fr] of [[40, -60, 0.9], [-42, 54, 0.4], [70, 10, 0.1]]) { const q = [pc('box', 0x5a3d26, [0, 0.1, 0], [12, 0.2, 8], null, 'matte')]; for (let i = 0; i < 5; i++) for (let k = 0; k < 7; k++) q.push(pc('sph', [0x5fc04a, 0x3f9a3a, 0xffc23a][i % 3], [-4.6 + k * 1.55, 0.42, -3 + i * 1.5], [0.7, 0.6, 0.7], null, 'matte')); props.push(xf(q, [fx0, Y, fz0], [0, fr, 0])); }
+  for (let i = 0; i < 10; i++) { const a = i / 10 * PI * 2 + 0.3, x = Math.cos(a) * 50, z = Math.sin(a) * 50; props.push(xf([pc('cyl', 0x2c2c34, [0, 2, 0], [0.22, 4, 0.22], null, 'metal'), pc('box', 0xffe2a0, [0, 4.3, 0], [0.5, 0.65, 0.5], null, 'glow', { top: 0xffffff }), pc('cone4', 0x2c2c34, [0, 4.8, 0], [0.8, 0.4, 0.8], [0, PI / 4, 0], 'metal')], [x, Y, z])); const gl = glow(0xffc870, 6, 0.45); gl.position.set(x, Y + 4.3, z); town.add(gl); }
+  const mill = new T.Group(); mill.position.set(-61, Y, -10); town.add(mill); build(mill, [pc('taper', 0xefe3c6, [0, 5, 0], [9, 10, 9], null, 'plaster'), pc('cone', 0xb8433a, [0, 11.6, 0], [7, 3.4, 7], null, 'roof'), pc('box', 0x7a5232, [0, 1.5, 2.9], [1.6, 3, 0.3], null, 'wood'), pc('cyl', 0x5a3d26, [0, 9, 3.2], [0.5, 1.6, 0.5], [PI / 2, 0, 0], 'wood')]).forEach(m => { m.receiveShadow = true; blockers.push(m); }); colliders.push({ x: -61, z: -10, r: 4.2 });
+  const blades = new T.Group(); blades.position.set(0, 9, 4); mill.add(blades); build(blades, [0, 1, 2, 3].map(i => xf([pc('box', 0x5a3d26, [0, 3.6, 0], [0.25, 7.2, 0.2], null, 'wood'), pc('box', 0xf2efe6, [0.9, 4.4, 0], [1.6, 5, 0.06], null, 'cloth')], null, [0, 0, i * PI / 2]))); mill.rotation.y = 1.4; anims.push(t => { blades.rotation.z = t * 0.7; });
   build(town, props).forEach(m => { m.receiveShadow = true; });
+}
+// Weitere Dörfer und kleine Stationen
+function buildPlaces(places) {
+  for (const pl of places) {
+    if (pl.id === 'luminhafen') continue; const g = new T.Group(), Y = env.terrainH(pl.x, pl.z), ps = [], P = (q, x, z, ry) => ps.push(xf(q, [pl.x + x, Y, pl.z + z], [0, ry || 0, 0])); scene.add(g);
+    const lamp = (x, z) => { P([pc('cyl', 0x2c2c34, [0, 1.8, 0], [0.2, 3.6, 0.2], null, 'metal'), pc('box', 0xffe2a0, [0, 3.9, 0], [0.46, 0.6, 0.46], null, 'glow', { top: 0xffffff }), pc('cone4', 0x2c2c34, [0, 4.35, 0], [0.75, 0.36, 0.75], [0, PI / 4, 0], 'metal')], x, z); const gl = glow(0xffc870, 5.5, 0.45); gl.position.set(pl.x + x, Y + 3.9, pl.z + z); g.add(gl); };
+    const flag = (x, z, c) => P([pc('cyl', 0x4a3a2a, [0, 3.5, 0], [0.18, 7, 0.18], null, 'wood'), pc('sph', 0xd9b765, [0, 7.1, 0], 0.36, null, 'metal'), pc('box', c, [0.8, 5.9, 0], [1.5, 1.7, 0.06], null, 'cloth', { top: 0xffffff })], x, z, sr(0, 3));
+    if (pl.type === 'dorf') {
+      const plaza = new T.Mesh(new T.CircleGeometry(13, 36), new T.MeshStandardMaterial({ map: TX.cobble, roughness: 0.9 })); plaza.rotation.x = -PI / 2; plaza.position.set(pl.x, Y + 0.07, pl.z); plaza.receiveShadow = true; g.add(plaza); groundMeshes.push(plaza);
+      for (let k = 0; k < 5; k++) { const a = k / 5 * PI * 2 + 0.3, x = pl.x + Math.cos(a) * 21, z = pl.z + Math.sin(a) * 21; houseFn((k + 2) % 6, x, z, Math.atan2(pl.x - x, pl.z - z)); }
+      P([pc('cyl', 0x9a948a, [0, 0.6, 0], [3, 1.2, 3], null, 'stone'), pc('cyl', 0x2a86c4, [0, 1.16, 0], [2.4, 0.1, 2.4], null, 'gloss'), pc('cyl6', 0x6a4a2c, [-1.2, 2.2, 0], [0.24, 3.2, 0.24], null, 'wood'), pc('cyl6', 0x6a4a2c, [1.2, 2.2, 0], [0.24, 3.2, 0.24], null, 'wood'), pc(roofGeo(3.6, 2.2, 1), 0xb8433a, [0, 3.7, 0], null, null, 'roof')], 0, 0); colliders.push({ x: pl.x, z: pl.z, r: 2.4 });
+      for (let k = 0; k < 5; k++) { const a = k / 5 * PI * 2 + 0.93; lamp(Math.cos(a) * 13.5, Math.sin(a) * 13.5); } flag(-5, 9, 0x3a6ad6); flag(5, 9, 0xd6453c);
+      for (let i = 0; i < 30; i++) { const a = i / 30 * PI * 2; if (i % 6 < 2) continue; const x = Math.cos(a) * 33, z = Math.sin(a) * 33; ps.push(xf([pc('cyl6', 0x7a5a3c, [0, 0.8, 0], [0.32, 1.7, 0.32], null, 'wood'), pc('box', 0x8a6a48, [0, 1.15, 3.4], [0.14, 0.24, 6.9], null, 'wood'), pc('box', 0x8a6a48, [0, 0.6, 3.4], [0.14, 0.24, 6.9], null, 'wood')], [pl.x + x, env.terrainH(pl.x + x, pl.z + z) - 0.1, pl.z + z], [0, -a, 0])); }
+      P([pc('box', 0x9a7248, [0, 1.1, 0], [4.4, 0.2, 2], null, 'wood'), [-2, 2].map(x => pc('cyl6', 0x6a4a2c, [x, 1.7, -0.9], [0.2, 3.4, 0.2], null, 'wood')), [0, 1, 2, 3].map(i => pc('box', i % 2 ? 0xf2efe6 : 0x3f8f52, [-1.65 + i * 1.1, 3.3, 0], [1.1, 0.1, 2.6], [0.28, 0, 0], 'matte')), [0, 1, 2].map(i => pc('sph', [0xff4a3a, 0xffa030, 0x8fd040][i], [-1.2 + i * 1.2, 1.42, 0.1], 0.4, null, 'gloss'))], -9, -4, 1.1);
+    } else {
+      P([[0, 1, 2, 3, 4, 5, 6].map(i => pc('rock', 0x8a8680, [Math.cos(i * 0.9) * 1.1, 0.2, Math.sin(i * 0.9) * 1.1], 0.55, null, 'stone')), pc('cyl', 0x4a3220, [0, 0.3, 0], [0.24, 1.5, 0.24], [0, 0, 1.2], 'wood'), pc('cyl', 0x4a3220, [0, 0.3, 0], [0.24, 1.5, 0.24], [1.2, 0.8, 0], 'wood'), pc('cone', 0xff9a3a, [0, 0.9, 0], [0.9, 1.5, 0.9], null, 'glow', { top: 0xfff0a0 })], 0, 0);
+      const fg = glow(0xff8a3a, 7, 0.6); fg.position.set(pl.x, Y + 1.2, pl.z); g.add(fg); anims.push(() => { if (Math.random() < 0.3 && camera.position.distanceToSquared(fg.position) < 12000) pAdd.emit({ x: pl.x + rnd(-0.4, 0.4), y: Y + 1.2, z: pl.z + rnd(-0.4, 0.4), n: 1, vy: 2.4, vs: 0.5, life: 1.3, size: 0.35, c: 0xffa040, c2: 0xff3010 }); });
+      for (const [a, c] of [[0.6, 0xd8c8a0], [2.5, 0xb8433a]]) { const x = Math.cos(a) * 6.5, z = Math.sin(a) * 6.5; P([pc('cone4', c, [0, 1.9, 0], [5.4, 3.8, 5.4], [0, PI / 4, 0], 'cloth', { g: 0.3 }), pc('box', 0x2a201c, [0, 1.1, 1.9], [1.3, 2.2, 0.1], [-0.42, 0, 0], 'matte'), pc('cyl', 0x6a4a2c, [0, 4, 0], [0.12, 0.9, 0.12], null, 'wood')], x, z, -a + PI / 2); colliders.push({ x: pl.x + x, z: pl.z + z, r: 2.6 }); }
+      P([[-1.4, 1.4].map(x => [-1.4, 1.4].map(z => pc('cyl6', 0x6a4a2c, [x, 3.2, z], [0.3, 6.4, 0.3], null, 'wood'))), pc('box', 0x8a6a48, [0, 5.4, 0], [3.6, 0.25, 3.6], null, 'wood'), [-1.7, 1.7].map(x => pc('box', 0x8a6a48, [x, 6, 0], [0.15, 0.2, 3.6], null, 'wood')), [-1.7, 1.7].map(z => pc('box', 0x8a6a48, [0, 6, z], [3.6, 0.2, 0.15], null, 'wood')), pc(roofGeo(4.6, 4.4, 1.5), 0x5a3d26, [0, 7.4, 0], null, null, 'roof')], -7, -5, 0.4); colliders.push({ x: pl.x - 7, z: pl.z - 5, r: 2.2 });
+      P([pc('box', 0xb08a58, [0, 0.5, 0], [1, 1, 1], null, 'wood'), pc('box', 0xb08a58, [1.2, 0.4, 0.3], [0.8, 0.8, 0.8], [0, 0.5, 0], 'wood'), pc(lathe([[0.01, 0], [0.5, 0], [0.62, 0.6], [0.5, 1.2], [0.01, 1.2]], 12), 0x9a7248, [-1.3, 0, 0.2], null, null, 'wood')], 5, -6, 0.7); flag(-2, 8, 0xffc23a); lamp(7, 4); lamp(-8, 3);
+    }
+    build(g, ps).forEach(m => { m.receiveShadow = true; });
+  }
+}
+function waystone(color = 0x7fe8ff) {
+  const g = new T.Group(); build(g, [pc('cyl', 0x9a948a, [0, 0.25, 0], [3.4, 0.5, 3.4], null, 'stone'), pc('cyl6', 0x8a8f9a, [0, 2.3, 0], [1.1, 3.8, 1.1], null, 'stone', { g: 0.3 }), pc('cone', 0x8a8f9a, [0, 4.5, 0], [1.1, 0.9, 1.1], null, 'stone'), pc('box', color, [0, 2.3, 0.5], [0.12, 2.2, 0.06], null, 'glow'), pc('box', color, [0, 2.9, 0.5], [0.7, 0.12, 0.06], null, 'glow'), pc('box', color, [0, 2.3, -0.5], [0.12, 2.2, 0.06], null, 'glow'), pc('box', color, [0.5, 2.3, 0], [0.06, 2.2, 0.12], null, 'glow'), pc('box', color, [-0.5, 2.3, 0], [0.06, 2.2, 0.12], null, 'glow')]);
+  const c = new T.Group(); build(c, [pc('oct', color, null, [0.7, 1.3, 0.7], null, 'glow', { top: 0xffffff })]); c.add(glow(color, 5, 0.6)); g.add(c); const ru = flat(TX.rune, color, 5.4); ru.position.y = 0.56; ru.material.opacity = 0.7; g.add(ru);
+  anims.push(t => { c.position.y = 5.9 + Math.sin(t * 1.6) * 0.25; c.rotation.y = t; ru.rotation.z = t * 0.4; }); scene.add(g); return g;
 }
 
 /* ---------- Stimmung (Himmel, Licht, Nebel) ---------- */
@@ -981,7 +1037,7 @@ function frame(dt, time, f, zone) {
   fpsT += dt; fpsN++; if (fpsT > 4) { const fps = fpsN / fpsT; fpsT = 0; fpsN = 0; if (fps < 22 && time > 8 && quality !== 'niedrig' && api.auto) { setQuality(quality === 'hoch' ? 'mittel' : 'niedrig'); if (api.onQuality) api.onQuality(quality); } }
 }
 
-const api = { init, frame, setQuality, setMood, dungeon, portal, fx, projectile, loot, selection, glow, pc, build, parts, mirror, xf, lathe, tube, tex, auto: true, get quality() { return quality; }, get scene() { return scene; }, get camera() { return camera; }, get renderer() { return renderer; }, groundMeshes, blockers, colliders, B, M, TX, particles: () => ({ add: pAdd, norm: pNorm }), T, lerp, clamp, rnd };
+const api = { init, frame, setQuality, setMood, dungeon, portal, waystone, landColor, fx, projectile, loot, selection, glow, pc, build, parts, mirror, xf, lathe, tube, tex, auto: true, get quality() { return quality; }, get scene() { return scene; }, get camera() { return camera; }, get renderer() { return renderer; }, groundMeshes, blockers, colliders, B, M, TX, particles: () => ({ add: pAdd, norm: pNorm }), T, lerp, clamp, rnd };
 return api;
 })();
 
@@ -1304,7 +1360,7 @@ GFX.mob = function (def) { const g = new T.Group(), anim = MOBS[def.model](g, de
 'use strict';
 /* Wolkenreich – Engine */
 (() => {
-const { CLASSES, SPECS, SKILLS, RAR, SETS, SETF, UPCHANCE, DUNGEONS, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed } = WR;
+const { CLASSES, SPECS, SKILLS, RAR, SETS, SETF, UPCHANCE, DUNGEONS, PLACES, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed } = WR;
 const $ = s => document.querySelector(s);
 const rnd = (a, b) => a + Math.random() * (b - a);
 const rint = (a, b) => Math.floor(rnd(a, b + 1));
@@ -1314,11 +1370,18 @@ const SAVE_KEY = 'wolkenreich_save_v1';
 const WATER = -3;
 
 /* ---------- Welt-Geometrie ---------- */
-function terrainH(x, z) {
+function rawH(x, z) {
   const d = Math.hypot(x, z);
   let h = 7 * Math.sin(x * 0.013) * Math.cos(z * 0.011) + 3.5 * Math.sin(x * 0.031 + 1.3) * Math.sin(z * 0.027 + 0.5) + 0.8 * Math.sin(x * 0.09) * Math.cos(z * 0.08);
-  h = h * smooth(30, 90, d) + 1.5;
+  h = h * smooth(84, 135, d) + 1.5;
   h -= smooth(400, 480, d) * 40;
+  return h;
+}
+for (const pl of PLACES) pl.h = rawH(pl.x, pl.z);
+// Dörfer und Stationen stehen auf eingeebnetem Boden
+function terrainH(x, z) {
+  let h = rawH(x, z);
+  for (const pl of PLACES) if (pl.id !== 'luminhafen') { const d = Math.hypot(x - pl.x, z - pl.z); if (d < pl.r + 22) h += (pl.h - h) * (1 - smooth(pl.r, pl.r + 22, d)); }
   return h;
 }
 function islandAt(x, z) { for (const i of ISLANDS) if (Math.hypot(x - i.x, z - i.z) < i.r - 0.5) return i; return null; }
@@ -1339,7 +1402,7 @@ function groundAt(x, z, y) {
 
 /* ---------- Grafik ---------- */
 const canvas = $('#c');
-GFX.init(canvas, { terrainH, ZONES, ISLANDS, WATER });
+GFX.init(canvas, { terrainH, ZONES, ISLANDS, WATER, PLACES });
 const scene = GFX.scene, camera = GFX.camera, groundMeshes = GFX.groundMeshes, fx = GFX.fx, ring = fx.ring;
 const FLOATERS = { wisp: 1, ghost: 1, guardian: 1 };
 const pickMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }), pickGeo = new THREE.SphereGeometry(0.5, 8, 6);
@@ -1350,7 +1413,7 @@ function runTimers(dt) { for (let i = timers.length - 1; i >= 0; i--) { timers[i
 
 /* ---------- Spielzustand ---------- */
 const p = {
-  name: 'Wanderer', hair: HAIRS[0], cls: 'wanderer', spec: null, dun: null, lvl: 1, exp: 0, gold: 50, sp: 0,
+  name: 'Wanderer', hair: HAIRS[0], cls: 'wanderer', spec: null, dun: null, wp: ['luminhafen'], lvl: 1, exp: 0, gold: 50, sp: 0,
   stats: { str: 10, sta: 10, dex: 10, int: 10 }, inv: [], equip: { weapon: null, armor: null, board: null },
   q: { i: 0, on: false, prog: 0 }, hp: 1, mp: 1,
   x: 0, y: 2, z: 16, vy: 0, rot: Math.PI, onGround: true, flying: false, dead: false,
@@ -1515,8 +1578,10 @@ function shopHtml(ids) {
   return ids.map(id => { const it = ITEMS[id]; return `<div class="shoprow" data-tip="${esc(itemTip(id))}"><span class="ic">${it.icon}</span><span class="nm">${it.name}<small>${it.atk ? 'Angriff ' + it.atk : it.def ? 'Verteidigung ' + it.def : it.hp ? '+' + it.hp + ' Leben' : it.mp ? '+' + it.mp + ' Mana' : 'Tempo ' + it.speed}${it.lvl > 1 ? ' · St. ' + it.lvl : ''}</small></span><button data-buy="${id}" ${p.gold < it.price ? 'disabled' : ''}>${it.price.toLocaleString('de-DE')} 💰</button></div>`; }).join('');
 }
 function upgradeInfo(slot) { const e = p.equip[slot]; if (!e) return null; const pl = e.plus || 0; return { e, pl, cost: Math.round(ITEMS[e.id].price * 0.12 * (pl + 1)) + 50, chance: UPCHANCE[pl] || 0, stones: 1 + Math.floor(pl / 3), scrolls: pl >= 7 ? 2 : pl >= 3 ? 1 : 0 }; }
+for (const pl of PLACES) (pl.npcs || []).forEach((q, i) => { const a = 2.2 + i * 1.5, r = pl.type === 'dorf' ? 8 : 4.5; NPCS.push({ id: pl.id + i, kind: q[0], name: q[1], role: q[0] === 'tessa' ? 'Laden' : 'Verbesserung', x: pl.x + Math.cos(a) * r, z: pl.z + Math.sin(a) * r, hair: q[2], face: [pl.x, pl.z] }); });
 const portals = [];
 function buildDungeons() {
+  for (const pl of PLACES) { const o = pl.id === 'luminhafen' ? [15, 23] : pl.type === 'dorf' ? [0, 9] : [3.5, 5], x = pl.x + o[0], z = pl.z + o[1], g = GFX.waystone(); g.position.set(x, terrainH(x, z), z); const q = { portal: true, wp: pl, x, y: terrainH(x, z) - 1.4, z, name: 'Wegstein', role: pl.name }; q.pick = addPick(g, 2.6, 3.4, 5.6, q, 'npc'); const l = document.createElement('div'); l.className = 'lbl'; l.innerHTML = `Wegstein<small>${pl.name} · Schnellreise</small>`; $('#labels').appendChild(l); q.lbl = l; portals.push(q); pl.stone = q; }
   const mk = (x, y, z, col, name, sub, o) => { const g = GFX.portal(col); g.position.set(x, y, z); g.rotation.y = o.ry || 0; const q = Object.assign({ portal: true, x, y, z, name, role: sub }, o); q.pick = addPick(g, 2.6, 4.6, 5.4, q, 'npc'); const l = document.createElement('div'); l.className = 'lbl'; l.innerHTML = `${name}<small>${sub}</small>`; $('#labels').appendChild(l); q.lbl = l; portals.push(q); return q; };
   DUN.forEach((d, i) => {
     d.gates = GFX.dungeon(d); d.locks = []; const a = 0.98 + i * Math.PI / 2, x = Math.cos(a) * 58, z = Math.sin(a) * 58; d.px = x; d.pz = z;
@@ -1526,31 +1591,38 @@ function buildDungeons() {
     spawnMob(d.boss, { x: rb.x, z: rb.z, r: rb.r - 3, y: d.y, isl: true, dun: d, ri: 4 });
   });
 }
+function travelTo(pl) {
+  if (p.dun) { p.dun = null; GFX.setMood(null); } const st = pl.stone; p.flying = false; p.x = st.x + 2.5; p.z = st.z + 2.5; p.y = terrainH(p.x, p.z); p.vy = 0; p.moveTo = null; p.attacking = false; p.interact = null; setTarget(null);
+  for (const m of mobs) if (m.state === 'chase') m.state = 'return'; ring(p.x, p.y, p.z, 0x9ff0ff, 6); beep(520, 0.4, 'sine', 0.06, 400); log(`Du reist nach ${pl.name}.`, 'g'); zoneName = ''; hudT = 0; curNpc = null; showWin('winNpc', false); showWin('winMap', false); save();
+}
 function usePortal(q) {
+  if (q.wp) { if (!p.wp.includes(q.wp.id)) p.wp.push(q.wp.id); curNpc = q; shopOpen = false; $('#npcTitle').textContent = `Wegstein – ${q.wp.name}`;
+    $('#npcBody').innerHTML = 'Die Wegsteine verbinden alle Orte, die du schon besucht hast. Wohin möchtest du reisen?' + PLACES.map(pl => `<div class="shoprow"><span class="ic">${pl.type === 'dorf' ? '🏠' : '⛺'}</span><span class="nm">${p.wp.includes(pl.id) ? pl.name : '<span class="muted">??? (noch nicht entdeckt)</span>'}<small>${pl.type === 'dorf' ? 'Dorf' : 'Station'}</small></span>${pl === q.wp ? '<span class="muted">hier</span>' : p.wp.includes(pl.id) ? `<button data-wp="${pl.id}">Reisen</button>` : ''}</div>`).join('') + '<div class="muted" style="margin-top:6px">Tipp: Die Karte (M) zeigt alle Orte.</div>';
+    return showWin('winNpc', true); }
   if (q.enter) { const d = q.enter; if (p.lvl < d.lvl) return log(`${d.name}: Du brauchst mindestens Stufe ${d.lvl}.`, 'r'); p.dun = d; p.flying = false; p.x = d.rooms[0].x; p.z = d.rooms[0].z + 3; p.y = d.y; p.rot = 0; cam.yaw = Math.PI; GFX.setMood(d.mood); log(`Du betrittst: ${d.name}. Am Ende wartet ${MOBS[d.boss].name}.`, 'g'); }
   else { const d = q.exit; p.dun = null; p.x = d.px * 0.86; p.z = d.pz * 0.86; p.y = terrainH(p.x, p.z); GFX.setMood(null); for (const m of mobs) if (m.state === 'chase') m.state = 'return'; }
   p.vy = 0; p.moveTo = null; p.attacking = false; setTarget(null); ring(p.x, p.y, p.z, 0x9ff0ff, 6); beep(520, 0.4, 'sine', 0.06, 400); zoneName = ''; hudT = 0; save();
 }
 function openNpc(n) {
   if (n.portal) return usePortal(n);
-  curNpc = n; shopOpen = n.id === 'tessa' || n.id === 'ivo'; $('#npcTitle').textContent = `${n.name} – ${n.role}`; let h = '';
-  if (n.id === 'mira') {
+  const K = n.kind || n.id; curNpc = n; shopOpen = K === 'tessa' || K === 'ivo'; $('#npcTitle').textContent = `${n.name} – ${n.role}`; let h = '';
+  if (K === 'mira') {
     const q = curQuest();
     if (!q) h = 'Du hast alles vollbracht, was ich mir je erträumt habe. Wolkenreich ist sicher – dank dir!';
     else if (!p.q.on) h = p.lvl < q.lvl ? `Ich habe bald wieder eine Aufgabe für dich. Komm zurück, wenn du <b>Stufe ${q.lvl}</b> erreicht hast.` : `<h4>${q.name}</h4>${q.text}<h4>Ziel</h4>${questGoal(q)}<h4>Belohnung</h4>${rewardText(q)}<div class="npcbtns"><button data-act="accept">Quest annehmen</button></div>`;
     else if (questDone()) h = `<h4>${q.name}</h4>Wunderbar! Du hast es geschafft. Hier ist deine Belohnung:<br><b>${rewardText(q)}</b><div class="npcbtns"><button data-act="finish">Quest abschließen</button></div>`;
     else h = `<h4>${q.name}</h4>${q.text}<h4>Fortschritt</h4>${questGoal(q)}: <b>${questProg()} / ${q.n}</b>`;
-  } else if (n.id === 'tessa') {
+  } else if (K === 'tessa') {
     const ids = Object.keys(ITEMS).filter(id => { const it = ITEMS[id]; return it.type === 'use' || (isGear(id) && !it.fr && !it.acc && !it.old && (!it.cls || it.cls === p.cls) && it.lvl <= p.lvl + 9 && it.lvl >= p.lvl - 16); });
     h = `Willkommen! Sieh dich um. <span class="muted">(Zum Verkaufen im Inventar auf einen Gegenstand klicken.)</span><div style="margin-top:8px">${shopHtml(ids)}</div>`;
-  } else if (n.id === 'ivo') {
+  } else if (K === 'ivo') {
     h = `Der Himmel ruft! Rüste ein Flugbrett aus und drücke <b>F</b>, um abzuheben. <b>Leertaste</b> steigt, <b>X</b> sinkt. Die Himmelsinseln liegen im Südosten.<div style="margin-top:8px">${shopHtml(['brett1', 'brett2'])}</div>`;
-  } else if (n.id === 'borin') {
+  } else if (K === 'borin') {
     h = `Ich verbessere Waffen, Rüstung und Accessoires bis <b>+10</b> – jede Stufe bringt <b>+8 %</b> auf die Werte. Ich brauche Sternsplitter 💎 (du hast <b>${countItem('splitter')}</b>) und Taler, ab <b>+4</b> zusätzlich Verbesserungsrollen 📜 (du hast <b>${countItem('rolle')}</b>). Beides findest du bei Monstern. Je höher die Stufe, desto öfter misslingt es – dann sind nur die Materialien weg.<div class="muted" style="margin:6px 0">Chancen: ${UPCHANCE.map((c, i) => `+${i + 1}: ${Math.round(c * 100)} %`).join(' · ')}</div>`;
     let any = false;
     for (const slot of WEAR) { const u = upgradeInfo(slot); if (!u) continue; any = true; const ok = p.gold >= u.cost && countItem('splitter') >= u.stones && countItem('rolle') >= u.scrolls; h += `<div class="shoprow"><span class="ic">${ITEMS[u.e.id].icon}</span><span class="nm">${gearName(u.e.id, u.e.r, u.pl)}${u.pl < 10 ? `<small>→ +${u.pl + 1} · Chance <b>${Math.round(u.chance * 100)} %</b> · ${u.stones} 💎${u.scrolls ? ' + ' + u.scrolls + ' 📜' : ''} + ${u.cost.toLocaleString('de-DE')} Taler</small>` : '<small>Maximal verbessert</small>'}</span>${u.pl < 10 ? `<button data-up="${slot}" ${ok ? '' : 'disabled'}>Verbessern</button>` : ''}</div>`; }
     if (!any) h += '<div class="muted">Du trägst nichts, das ich verbessern könnte.</div>';
-  } else if (n.id === 'kaela') {
+  } else if (K === 'kaela') {
     const reset = `<br><br>Für ${(p.lvl * 60).toLocaleString('de-DE')} Taler setze ich deine Attributpunkte zurück.<div class="npcbtns"><button data-act="reset" ${p.gold < p.lvl * 60 ? 'disabled' : ''}>Attribute zurücksetzen</button></div>`;
     if (p.cls === 'wanderer') {
       if (p.lvl < 10) h = `Du hast Talent, Wanderer. Komm zu mir, wenn du <b>Stufe 10</b> erreicht hast – dann wähle deine Berufung.`;
@@ -1565,6 +1637,7 @@ function openNpc(n) {
 }
 $('#npcBody').addEventListener('click', e => {
   const d = e.target.dataset; if (e.target.tagName !== 'BUTTON') return;
+  if (d.wp) { const pl = PLACES.find(q => q.id === d.wp); if (pl && p.wp.includes(pl.id)) travelTo(pl); return; }
   if (d.act === 'accept') { p.q.on = true; p.q.prog = 0; log(`Quest angenommen: ${curQuest().name}`, 'g'); beep(660, 0.12, 'triangle'); }
   else if (d.act === 'finish' && questDone()) {
     const q = curQuest(); if (p.inv.length + q.items.length > 36) return log('Dein Inventar ist zu voll für die Belohnung!', 'r');
@@ -1599,8 +1672,8 @@ const HELP = `<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> laufen · <b>Klic
 Monster mit <b style="color:#ff6a5a">rotem Namen</b> greifen von selbst an. <b>Klick auf Monster</b> wählt es aus, <b>zweiter Klick</b> oder <kbd>1</kbd> greift an · <kbd>Tab</kbd> nächstes Ziel<br>
 <kbd>2</kbd>–<kbd>8</kbd> Fertigkeiten · <kbd>9</kbd> Heiltrank · <kbd>0</kbd> Manatrank<br>
 <kbd>F</kbd> fliegen (Flugbrett nötig) – <kbd>Leertaste</kbd> steigen, <kbd>X</kbd> sinken<br>
-<kbd>C</kbd> Charakter · <kbd>I</kbd> Inventar · <kbd>L</kbd> Quests · <kbd>H</kbd> Hilfe · <kbd>Esc</kbd> schließen<br>
-<b>Klick auf Dorfbewohner</b> zum Reden. Die vier <b>Dungeon-Portale</b> stehen rund ums Dorf (hellblaue Punkte auf der Karte). Der Spielstand wird automatisch gespeichert.<br>
+<kbd>C</kbd> Charakter · <kbd>I</kbd> Inventar · <kbd>L</kbd> Quests · <kbd>M</kbd> Karte · <kbd>H</kbd> Hilfe · <kbd>Esc</kbd> schließen<br>
+<b>Klick auf Dorfbewohner</b> zum Reden. Die vier <b>Dungeon-Portale</b> stehen rund ums Dorf (hellblaue Punkte auf der Karte). <b>Wegsteine</b> in Dörfern und Stationen erlauben Schnellreisen zu besuchten Orten. Der Spielstand wird automatisch gespeichert.<br>
 <span class="gfxrow">Grafik: <button data-q="hoch">Hoch</button> <button data-q="mittel">Mittel</button> <button data-q="niedrig">Niedrig</button></span>`;
 document.querySelectorAll('.helpBody').forEach(e => e.innerHTML = HELP);
 const markQ = () => document.querySelectorAll('[data-q]').forEach(b => { b.style.outline = b.dataset.q === GFX.quality ? '2px solid #fff' : 'none'; });
@@ -1783,7 +1856,7 @@ const NPC_LOOK = {
 };
 function buildNpcs() {
   for (const n of NPCS) {
-    const h = GFX.human(Object.assign({ hair: n.hair, scale: 1.05 }, NPC_LOOK[n.id])); n.y = terrainH(n.x, n.z); n.rot = Math.atan2(-n.x, -n.z); h.g.position.set(n.x, n.y, n.z); h.g.rotation.y = n.rot; scene.add(h.g);
+    const h = GFX.human(Object.assign({ hair: n.hair, scale: 1.05 }, NPC_LOOK[n.kind || n.id])); n.y = terrainH(n.x, n.z); n.rot = n.face ? Math.atan2(n.face[0] - n.x, n.face[1] - n.z) : Math.atan2(-n.x, -n.z); h.g.position.set(n.x, n.y, n.z); h.g.rotation.y = n.rot; scene.add(h.g);
     n.pick = addPick(h.g, 1.6, 2.6, 3.8, n, 'npc'); n.h = h;
     const l = document.createElement('div'); l.className = 'lbl'; $('#labels').appendChild(l); n.lbl = l; npcs.push(n);
   }
@@ -1886,8 +1959,10 @@ function updateHud(dt) {
     $('#gold').textContent = `💰 ${p.gold.toLocaleString('de-DE')} Taler`;
     $('#buffs').innerHTML = p.buffs.map(b => `<span>${b.icon} ${Math.ceil(b.t)}s</span>`).join('') + (p.sp ? '<span style="color:#7dffb0">▲ Punkte frei (C)</span>' : '');
     let zn = 'Wildnis'; const d0 = Math.hypot(p.x, p.z), isl = islandAt(p.x, p.z);
-    if (p.dun) zn = p.dun.name; else if (isl && p.y > isl.y - 2) zn = isl.name || 'Himmelsinseln'; else if (d0 < 45) zn = 'Luminhafen'; else for (const z of ZONES) if (Math.hypot(p.x - z.x, p.z - z.z) < z.r * 1.1) zn = z.name;
-    if (zn !== zoneName) { zoneName = zn; const zz = ZONES.find(q => q.name === zn); zoneKey = p.dun ? p.dun.amb : zz ? zz.id : zn === 'Luminhafen' ? 'town' : isl ? 'isl' : ''; $('#zone').textContent = zn; if (zn !== 'Wildnis') { const z = ZONES.find(q => q.name === zn); center(zn, z ? `Monster ab Stufe ${MOBS[z.mobs[0][0]].lvl}` : p.dun ? `Dungeon · Stufe ${p.dun.lvl}–${p.dun.max}` : isl ? `Monster ab Stufe ${MOBS[isl.mobs[0][0]].lvl}` : 'Sicheres Dorf'); } }
+    const here = !p.dun && PLACES.find(pl => pl.id !== 'luminhafen' && Math.hypot(p.x - pl.x, p.z - pl.z) < pl.r + 6);
+    for (const pl of PLACES) if (!p.dun && !p.wp.includes(pl.id) && Math.hypot(p.x - pl.x, p.z - pl.z) < pl.r + 10) { p.wp.push(pl.id); log(`Wegstein entdeckt: ${pl.name}. Du kannst jetzt hierher reisen.`, 'g'); beep(784, 0.25, 'triangle', 0.05, 300); }
+    if (p.dun) zn = p.dun.name; else if (here && p.y < here.h + 12) zn = here.name; else if (isl && p.y > isl.y - 2) zn = isl.name || 'Himmelsinseln'; else if (d0 < 82) zn = 'Luminhafen'; else for (const z of ZONES) if (Math.hypot(p.x - z.x, p.z - z.z) < z.r * 1.1) zn = z.name;
+    if (zn !== zoneName) { zoneName = zn; const zz = ZONES.find(q => q.name === zn); zoneKey = p.dun ? p.dun.amb : zz ? zz.id : zn === 'Luminhafen' || PLACES.some(q => q.name === zn) ? 'town' : isl ? 'isl' : ''; $('#zone').textContent = zn; if (zn !== 'Wildnis') { const z = ZONES.find(q => q.name === zn); center(zn, z ? `Monster ab Stufe ${MOBS[z.mobs[0][0]].lvl}` : p.dun ? `Dungeon · Stufe ${p.dun.lvl}–${p.dun.max}` : PLACES.some(q => q.name === zn) ? (PLACES.find(q => q.name === zn).type === 'dorf' ? 'Sicheres Dorf' : 'Station') : isl ? `Monster ab Stufe ${MOBS[isl.mobs[0][0]].lvl}` : 'Sicheres Dorf'); } }
     for (const n of npcs) { const mk = npcMark(n), html = `${mk ? `<span class="qm">${mk}</span>` : ''}${n.name}<small>${n.role}</small>`; if (n._h !== html) { n._h = html; n.lbl.innerHTML = html; } }
   }
   if (p.dun) { const d = p.dun, alive = [0, 0, 0, 0, 0], pi = dunIdx(d, p.x, p.z); for (const m of mobs) if (m.home.dun === d && !m.dead) alive[m.home.ri]++; for (let i = 1; i < 4; i++) { d.locks[i] = alive[i] > 0 && pi <= i; d.gates[i].visible = alive[i] > 0; } }
@@ -1896,7 +1971,7 @@ function updateHud(dt) {
   for (let i = 0; i < mobLbl.length; i++) { const l = mobLbl[i], q = near[i], s = q ? toScreen(q[1].x, mobCenterY(q[1]) + 1.7 * q[1].def.scale, q[1].z) : null; if (!s) { if (l.on) { l.el.style.display = 'none'; l.on = false; } continue; } const m = q[1], tx = `${m.def.boss ? '👑 ' : ''}${m.def.name} · St. ${m.def.lvl}`; if (l.tx !== tx) { l.tx = tx; l.el.textContent = tx; l.el.style.color = m.def.aggro ? '#ff5a48' : '#fff3c4'; } if (!l.on) { l.el.style.display = ''; l.on = true; } l.el.style.left = s.x + 'px'; l.el.style.top = s.y + 'px'; }
   for (const n of portals) { const s = Math.hypot(n.x - p.x, n.z - p.z) < 110 ? toScreen(n.x, n.y + 7.6, n.z) : null; if (s) { n.lbl.style.display = ''; n.lbl.style.left = s.x + 'px'; n.lbl.style.top = s.y + 'px'; } else n.lbl.style.display = 'none'; }
   for (const n of npcs) { const s = Math.hypot(n.x - p.x, n.z - p.z) < 90 ? toScreen(n.x, n.y + 4.0, n.z) : null; if (s) { n.lbl.style.display = ''; n.lbl.style.left = s.x + 'px'; n.lbl.style.top = s.y + 'px'; } else n.lbl.style.display = 'none'; }
-  mapT -= dt; if (mapT <= 0) { mapT = 0.12; drawMap(); }
+  mapT -= dt; if (mapT <= 0) { mapT = 0.12; drawMap(); if (!$('#winMap').classList.contains('hidden')) drawBigMap(); }
 }
 const mctx = $('#minimap').getContext('2d');
 function drawMap() {
@@ -1906,7 +1981,7 @@ function drawMap() {
   const circ = (x, z, r, col) => { const q = P(x, z); c.fillStyle = col; c.beginPath(); c.arc(q[0], q[1], r * k, 0, 7); c.fill(); };
   if (p.dun) { const d = p.dun; c.strokeStyle = '#5a6078'; c.lineWidth = d.w * k; c.beginPath(); d.rooms.forEach((r, i) => { const q = P(r.x, r.z); i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]); }); c.stroke(); for (const r of d.rooms) circ(r.x, r.z, r.r, '#5a6078'); }
   else for (const z of ZONES) circ(z.x, z.z, z.r, `rgba(${z.col.map(v => Math.round(v * 255)).join(',')},.75)`);
-  if (!p.dun) { circ(0, 0, 34, 'rgba(230,205,150,.9)'); for (const i of ISLANDS) circ(i.x, i.z, i.r, 'rgba(200,235,255,.75)'); }
+  if (!p.dun) { circ(0, 0, 34, 'rgba(230,205,150,.9)'); for (const pl of PLACES) if (pl.id !== 'luminhafen') circ(pl.x, pl.z, pl.type === 'dorf' ? 16 : 8, 'rgba(230,205,150,.9)'); for (const i of ISLANDS) circ(i.x, i.z, i.r, 'rgba(200,235,255,.75)'); }
   for (const n of portals) { const q = P(n.x, n.z); c.fillStyle = '#7ff0ff'; c.beginPath(); c.arc(q[0], q[1], 3.5, 0, 7); c.fill(); }
   for (const m of mobs) { if (m.dead) continue; const q = P(m.x, m.z); if (Math.abs(q[0] - 80) > 82 || Math.abs(q[1] - 80) > 82) continue; c.fillStyle = m === p.target ? '#fff' : m.def.boss ? '#ff3ad6' : m.def.aggro ? '#ff4a4a' : '#ffb04a'; c.fillRect(q[0] - 1.5, q[1] - 1.5, m.def.boss ? 6 : 3, m.def.boss ? 6 : 3); }
   for (const n of npcs) { const q = P(n.x, n.z); c.fillStyle = '#ffe04a'; c.beginPath(); c.arc(q[0], q[1], 3, 0, 7); c.fill(); }
@@ -1914,6 +1989,37 @@ function drawMap() {
   const d0 = Math.hypot(p.x, p.z); if (d0 > R && !p.dun) { const a = Math.atan2(-p.z, -p.x); c.fillStyle = '#ffe04a'; c.beginPath(); c.arc(80 + Math.cos(a) * 72, 80 + Math.sin(a) * 72, 4, 0, 7); c.fill(); }
   c.translate(80, 80); c.rotate(-p.rot + Math.PI); c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.beginPath(); c.moveTo(0, -7); c.lineTo(5, 6); c.lineTo(0, 3); c.lineTo(-5, 6); c.closePath(); c.fill(); c.stroke(); c.restore();
   c.fillStyle = '#fff'; c.font = 'bold 10px sans-serif'; c.fillText('N', 76, 11);
+}
+
+/* ---------- Große Karte (M) ---------- */
+let mapBg = null; const bctx = $('#bigmap').getContext('2d');
+function buildMapBg() {
+  const N = 300, c = document.createElement('canvas'); c.width = c.height = N; const x = c.getContext('2d'), id = x.createImageData(N, N), o = [0, 0, 0, 0, 0];
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const wx = (i / N - 0.5) * 920, wz = (j / N - 0.5) * 920, h = terrainH(wx, wz), k = (j * N + i) * 4; let r, g, b;
+    if (h < WATER) { const t = clamp((WATER - h) / 14, 0, 1); r = 70 - t * 40; g = 150 - t * 60; b = 205 - t * 50; } else { GFX.landColor(wx, wz, h, o); const sh = 1.1 + (terrainH(wx - 3, wz - 3) - h) * 0.06; r = o[0] * 255 * sh; g = o[1] * 255 * sh; b = o[2] * 255 * sh; }
+    id.data[k] = r; id.data[k + 1] = g; id.data[k + 2] = b; id.data[k + 3] = 255; }
+  x.putImageData(id, 0, 0); return c;
+}
+function questArea() { const q = curQuest(); if (!q || !p.q.on) return null; const mob = q.kill || Object.keys(MOBS).find(k => MOBS[k].drop === q.collect); for (const z of ZONES) if (z.mobs.some(m => m[0] === mob)) return z; for (const i of ISLANDS) if (i.mobs.some(m => m[0] === mob)) return i; return null; }
+function drawBigMap() {
+  const c = bctx, S = 600, sc = S / 920, M = (x, z) => [(x + 460) * sc, (z + 460) * sc]; c.clearRect(0, 0, S, S); c.textAlign = 'center';
+  const label = (t, x, y, col = '#fff', f = 'bold 12px sans-serif') => { c.font = f; c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,.85)'; c.strokeText(t, x, y); c.fillStyle = col; c.fillText(t, x, y); };
+  if (p.dun) { const d = p.dun; c.fillStyle = '#10121c'; c.fillRect(0, 0, S, S); const k = 2, D = (x, z) => [300 + (x - d.rooms[2].x / 2 - d.rooms[0].x / 2) * k, 40 + (z - d.rooms[0].z + 14) * k];
+    c.strokeStyle = '#4a5068'; c.lineWidth = d.w * k; c.beginPath(); d.rooms.forEach((r, i) => { const q = D(r.x, r.z); i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]); }); c.stroke();
+    d.rooms.forEach((r, i) => { const q = D(r.x, r.z); c.fillStyle = i === 4 ? '#6a3a4a' : '#4a5068'; c.beginPath(); c.arc(q[0], q[1], r.r * k, 0, 7); c.fill(); label(i === 0 ? 'Eingang' : i === 4 ? '👑 ' + MOBS[d.boss].name : `Raum ${i}: ${MOBS[d.mobs[i - 1]].name}`, q[0], q[1] - r.r * k - 6, i === 4 ? '#ff9a9a' : '#fff'); });
+    for (const m of mobs) if (m.home.dun === d && !m.dead) { const q = D(m.x, m.z); c.fillStyle = m.def.boss ? '#ff3ad6' : '#ff4a4a'; c.fillRect(q[0] - 2, q[1] - 2, m.def.boss ? 8 : 4, m.def.boss ? 8 : 4); }
+    const q = D(p.x, p.z); c.save(); c.translate(q[0], q[1]); c.rotate(-p.rot + Math.PI); c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.beginPath(); c.moveTo(0, -10); c.lineTo(7, 8); c.lineTo(0, 4); c.lineTo(-7, 8); c.closePath(); c.fill(); c.stroke(); c.restore();
+    label(`${d.name} · Dungeon Stufe ${d.lvl}–${d.max}`, 300, 585, '#ffd978', 'bold 15px sans-serif'); return; }
+  mapBg = mapBg || buildMapBg(); c.imageSmoothingEnabled = true; c.drawImage(mapBg, 0, 0, S, S);
+  const qa = questArea(), pulse = 0.5 + Math.sin(time * 4) * 0.5;
+  for (const z of ZONES) { const q = M(z.x, z.z), lv = z.mobs.map(m => MOBS[m[0]].lvl); c.setLineDash([5, 5]); c.strokeStyle = 'rgba(255,255,255,.45)'; c.lineWidth = 1.5; c.beginPath(); c.arc(q[0], q[1], z.r * sc, 0, 7); c.stroke(); c.setLineDash([]); label(z.name, q[0], q[1] - 3, '#fff', 'bold 13px sans-serif'); label(`Stufe ${Math.min(...lv)}–${Math.max(...lv)}`, q[0], q[1] + 12, lv[0] > p.lvl + 5 ? '#ff9a9a' : '#ffe9a8', '11px sans-serif'); }
+  for (const i of ISLANDS) { const q = M(i.x, i.z), lv = i.mobs.map(m => MOBS[m[0]].lvl); c.fillStyle = 'rgba(225,242,255,.7)'; c.strokeStyle = '#fff'; c.lineWidth = 1.5; c.beginPath(); c.arc(q[0], q[1], i.r * sc, 0, 7); c.fill(); c.stroke(); label(`☁ ${i.name || 'Himmelsinsel'} · St. ${Math.min(...lv)}${lv.length > 1 ? '–' + Math.max(...lv) : ''}`, q[0], q[1] - i.r * sc - 5, '#cfe6ff', 'bold 11px sans-serif'); }
+  if (qa) { const q = M(qa.x, qa.z); c.strokeStyle = `rgba(255,224,74,${0.5 + pulse * 0.5})`; c.lineWidth = 3; c.beginPath(); c.arc(q[0], q[1], qa.r * sc + 4 + pulse * 4, 0, 7); c.stroke(); label('❗ Questziel', q[0], q[1] + qa.r * sc + 16, '#ffe04a'); }
+  for (const n of portals) if (n.enter) { const q = M(n.x, n.z); c.fillStyle = '#7ff0ff'; c.strokeStyle = '#000'; c.lineWidth = 1; c.beginPath(); c.arc(q[0], q[1], 4, 0, 7); c.fill(); c.stroke(); }
+  for (const pl of PLACES) { const q = M(pl.x, pl.z), known = p.wp.includes(pl.id); c.font = pl.type === 'dorf' ? '20px sans-serif' : '15px sans-serif'; c.globalAlpha = known ? 1 : 0.55; c.fillText(pl.type === 'dorf' ? '🏠' : '⛺', q[0], q[1] + 6); c.globalAlpha = 1; label(known ? pl.name : '? ' + pl.name, q[0], q[1] + (pl.type === 'dorf' ? 22 : 19), known ? '#fff' : '#c8c8c8', pl.type === 'dorf' ? 'bold 12px sans-serif' : '11px sans-serif'); }
+  const q = M(clamp(p.x, -455, 455), clamp(p.z, -455, 455)); c.strokeStyle = `rgba(255,255,255,${1 - pulse * 0.6})`; c.lineWidth = 2; c.beginPath(); c.arc(q[0], q[1], 9 + pulse * 6, 0, 7); c.stroke();
+  c.save(); c.translate(q[0], q[1]); c.rotate(-p.rot + Math.PI); c.fillStyle = '#ff3a3a'; c.strokeStyle = '#fff'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(0, -10); c.lineTo(7, 8); c.lineTo(0, 4); c.lineTo(-7, 8); c.closePath(); c.fill(); c.stroke(); c.restore();
+  label('N', 300, 16, '#fff', 'bold 14px sans-serif'); c.textAlign = 'left';
 }
 
 /* ---------- Eingabe ---------- */
@@ -1942,7 +2048,7 @@ window.addEventListener('keydown', e => {
   if (e.repeat) { if (k === ' ' || k === 'tab') e.preventDefault(); return; }
   if (k >= '0' && k <= '9') { const s = slots.find(q => q.key === k); if (s) s.act(); }
   else if (k === 'tab') { e.preventDefault(); setTarget(nearestMob(45, p.target) || p.target); }
-  else if (k === 'f') toggleFly(); else if (k === 'c') toggleWin('winChar'); else if (k === 'i' || k === 'b') toggleWin('winInv'); else if (k === 'l' || k === 'q') toggleWin('winQuest'); else if (k === 'h') toggleWin('winHelp');
+  else if (k === 'f') toggleFly(); else if (k === 'c') toggleWin('winChar'); else if (k === 'i' || k === 'b') toggleWin('winInv'); else if (k === 'l' || k === 'q') toggleWin('winQuest'); else if (k === 'h') toggleWin('winHelp'); else if (k === 'm') toggleWin('winMap');
   else if (k === 'escape') { const open = [...document.querySelectorAll('.win')].filter(w => !w.classList.contains('hidden')); if (open.length) open.forEach(w => showWin(w.id, false)); else setTarget(null); }
   else if (k === ' ') e.preventDefault();
 });
@@ -1952,14 +2058,14 @@ window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; }
 /* ---------- Speichern ---------- */
 function save() {
   if (!started) return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ name: p.name, hair: p.hair, cls: p.cls, spec: p.spec, lvl: p.lvl, exp: p.exp, gold: p.gold, sp: p.sp, stats: p.stats, inv: p.inv, equip: p.equip, q: p.q, hp: p.hp, mp: p.mp, x: p.x, y: p.y, z: p.z })); } catch (e) { /* Speicher nicht verfügbar */ }
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ name: p.name, hair: p.hair, cls: p.cls, spec: p.spec, wp: p.wp, lvl: p.lvl, exp: p.exp, gold: p.gold, sp: p.sp, stats: p.stats, inv: p.inv, equip: p.equip, q: p.q, hp: p.hp, mp: p.mp, x: p.x, y: p.y, z: p.z })); } catch (e) { /* Speicher nicht verfügbar */ }
 }
 function loadSave() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s && s.name && CLASSES[s.cls] ? s : null; } catch (e) { return null; } }
 setInterval(save, 15000); window.addEventListener('beforeunload', save);
 
 /* ---------- Start ---------- */
 function startGame(s) {
-  if (s) { Object.assign(p, s); p.dun = null; if (p.x > 2000) { p.x = 0; p.z = 16; } p.inv = (s.inv || []).filter(i => ITEMS[i.id]); for (const k in p.equip) if (p.equip[k] && !ITEMS[p.equip[k].id]) p.equip[k] = null; if (p.flying || islandAt(p.x, p.z)) p.y = Math.max(p.y, groundAt(p.x, p.z, p.y)); else p.y = terrainH(p.x, p.z); }
+  if (s) { Object.assign(p, s); p.dun = null; p.wp = Array.isArray(s.wp) ? s.wp : ['luminhafen']; if (p.x > 2000) { p.x = 0; p.z = 16; } p.inv = (s.inv || []).filter(i => ITEMS[i.id]); for (const k in p.equip) if (p.equip[k] && !ITEMS[p.equip[k].id]) p.equip[k] = null; if (p.flying || islandAt(p.x, p.z)) p.y = Math.max(p.y, groundAt(p.x, p.z, p.y)); else p.y = terrainH(p.x, p.z); }
   else { p.name = ($('#nameInput').value.trim() || 'Wanderer').slice(0, 14); p.equip.weapon = { id: 'w_holz', plus: 0 }; p.equip.armor = { id: 'a_0', plus: 0 }; p.inv = [{ id: 'apfel', n: 5 }]; p.hp = maxHP(); p.mp = maxMP(); p.y = terrainH(p.x, p.z); }
   p.flying = false; refreshModel(); buildHotbar(); started = true; cam.yaw = 0;
   $('#start').classList.add('hidden'); $('#hud').classList.remove('hidden');

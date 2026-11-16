@@ -24,6 +24,8 @@ Nach Änderungen am Code: `node build.js` erzeugt die Standalone-Datei neu.
 - Sechs Accessoire-Plätze (2 Ringe, 2 Ohrringe, Halskette, Armreif) mit eigener Kollektion je Klasse; Accessoires gibt es nur in Dungeons und von Bossen
 - Legendäre Waffen (ab Stufe 60) und blutige Waffen (ab Stufe 80) mit eigenen Boni – nur als sehr seltene Boss-Beute
 - Vier Dungeons mit Elite-Monstern und Endboss: Wurzelkrypta (20–40), Frostgruft (40–60), Glutkern (60–80), Leerenspalt (80–100); die Portale stehen rund ums Dorf. Dungeon-Monster greifen von selbst an und verfolgen dich; eine Barriere öffnet sich erst, wenn der Raum geräumt ist
+- Große Weltkarte (`M`) mit Gebieten, Stufenbereichen, Orten, Dungeon-Portalen und Questziel
+- Drei Dörfer (Luminhafen, Birkenau, Aschenfurt) und sechs Stationen mit Händlern; Wegsteine erlauben Schnellreisen zu besuchten Orten
 - Fliegen mit Flugbrett, Minimap, automatisches Speichern (localStorage)
 
 ## Grafik
@@ -59,7 +61,7 @@ Bildrate schaltet das Spiel selbst herunter.
 | `2`–`8` | Fertigkeiten |
 | `9` / `0` | Heil- / Manatrank |
 | `F` | fliegen (Leertaste steigen, `X` sinken) |
-| `C` `I` `L` `H` | Charakter, Inventar, Quests, Hilfe |
+| `C` `I` `L` `M` `H` | Charakter, Inventar, Quests, Karte, Hilfe |
 
 Grafik: [three.js](https://threejs.org) r160 (MIT, siehe `three.LICENSE`). Alle Modelle werden
 im Code aus einfachen Formen erzeugt – keine externen Assets.

@@ -170,7 +170,7 @@ function makeMaterials() {
 
 /* ---------- Renderer & Szene ---------- */
 let renderer, scene, camera, sun, hemi, dome, water, env, skyMat, quality = 'hoch';
-const farIsles = [];
+const farIsles = []; let houseFn = null;
 const vegChunks = [], groundMeshes = [], anims = [], grassCells = [], clouds = [], blockers = [], colliders = [];
 const SUN = new T.Vector3(0.55, 0.72, 0.42).normalize();
 function init(canvas, e) {
@@ -215,6 +215,7 @@ function landColor(x, z, h, out) {
   for (const zn of ZONES) { const w = 1 - smooth(zn.r * 0.55, zn.r * 1.2, Math.hypot(x - zn.x, z - zn.z) + (n - 0.5) * 30); if (w > 0) c = c.map((v, k) => v + (zn.col[k] * 0.85 - v) * w); }
   const d = Math.hypot(x, z); let path = 1 - smooth(21, 27, d);
   for (const zn of ZONES) { const L = Math.hypot(zn.x, zn.z), t = clamp((x * zn.x + z * zn.z) / (L * L), 0, 1 - zn.r * 0.5 / L), pd = Math.hypot(x - zn.x * t, z - zn.z * t) + (n2 - 0.5) * 2.5; path = Math.max(path, 1 - smooth(2.2, 4.2, pd)); }
+  for (const pl of env.PLACES) if (pl.x || pl.z) { const L = Math.hypot(pl.x, pl.z), t = clamp((x * pl.x + z * pl.z) / (L * L), 0, 1), pd = Math.hypot(x - pl.x * t, z - pl.z * t) + (n2 - 0.5) * 2.5; path = Math.max(path, 1 - smooth(2.2, 4.2, pd), pl.type === 'station' ? 1 - smooth(7, 11, Math.hypot(x - pl.x, z - pl.z)) : 0); }
   c = c.map((v, k) => v + ([0.56, 0.44, 0.28][k] - v) * path * 0.92);
   const e = 1.5, sl = Math.hypot(env.terrainH(x + e, z) - env.terrainH(x - e, z), env.terrainH(x, z + e) - env.terrainH(x, z - e)) / (2 * e), rk = smooth(0.42, 0.75, sl);
   c = c.map((v, k) => v + ([0.5, 0.47, 0.42][k] - v) * rk);
@@ -248,8 +249,8 @@ function buildWorld() {
   const TYPES = vegetationTypes(), list = [], add = (t, x, z, s, c, y) => list.push({ t, x, z, y: y === undefined ? terrainH(x, z) : y, s, ry: sr(0, 6.28), c });
   const tint = (a, b) => { const k = sr(a, b); return col.setRGB(k, k * sr(0.96, 1.04), k * sr(0.94, 1.02)).getHex(); };
   for (let n = 0; n < 4400; n++) {
-    const x = sr(-440, 440), z = sr(-440, 440), d = Math.hypot(x, z), h = terrainH(x, z); if (d < 44 || d > 425 || h < -1.4) continue;
-    landColor(x, z, h, cc); if (cc[3] > 0.25) continue; if (d < 75 && [0, 1, 2, 3].some(i => Math.hypot(x - Math.cos(0.98 + i * PI / 2) * 58, z - Math.sin(0.98 + i * PI / 2) * 58) < 11)) continue; const zn = zoneAt(x, z, 1.1), q = sr();
+    const x = sr(-440, 440), z = sr(-440, 440), d = Math.hypot(x, z), h = terrainH(x, z); if (d < 86 || d > 425 || h < -1.4) continue; if (env.PLACES.some(pl => Math.hypot(x - pl.x, z - pl.z) < pl.r + 5)) continue;
+    landColor(x, z, h, cc); if (cc[3] > 0.25) continue; const zn = zoneAt(x, z, 1.1), q = sr();
     if (zn === 'frost') { if (q < 0.45) add('pine', x, z, sr(0.8, 1.5), 0xdfeaf2); else if (q < 0.7) add(q < 0.58 ? 'rock' : 'rock2', x, z, sr(1, 3.6), 0xe6eef6); else if (q < 0.8) add('icecrystal', x, z, sr(0.8, 1.8)); }
     else if (zn === 'moor') { if (q < 0.3) add('dark', x, z, sr(0.7, 1.2), tint(0.7, 0.9)); else if (q < 0.5) add('shroomP', x, z, sr(0.4, 1.3)); else if (q < 0.7) add('bush', x, z, sr(0.8, 1.6), tint(0.6, 0.8)); else if (q < 0.8) add('dead', x, z, sr(0.7, 1.1)); }
     else if (zn === 'ruinen') { if (q < 0.4) add('pillar', x, z, sr(0.8, 1.5)); else if (q < 0.65) add('rock2', x, z, sr(1, 3), tint(0.8, 1)); else if (q < 0.75) add('dead', x, z, sr(0.8, 1.2)); }
@@ -273,12 +274,12 @@ function buildWorld() {
   const fMat = windify(new T.MeshStandardMaterial({ map: TX.flower, alphaTest: 0.4, roughness: 1 }), 0.25, 0);
   const CS = 80; for (let cx = -440; cx < 440; cx += CS) for (let cz = -440; cz < 440; cz += CS) {
     const G = [], F = [];
-    for (let n = 0; n < 2100; n++) { const x = cx + sr(0, CS), z = cz + sr(0, CS), h = terrainH(x, z); if (h < -1.2 || Math.hypot(x, z) < 25) continue; landColor(x, z, h, cc); if (cc[3] > 0.35 || cc[4] > 0.4) continue; const zn = zoneAt(x, z, 1.0); if ((zn === 'fels' && sr() < 0.8) || ((zn === 'glut' || zn === 'vulkan') && sr() < 0.93) || (zn === 'ruinen' && sr() < 0.7)) continue; if (n < 90 && (zn === 'wiese' || zn === '' || zn === 'hain' || zn === 'moor')) F.push([x, h, z, sr(0.9, 1.5)]); else G.push([x, h, z, sr(1.5, 2.6), sr(0.4, 0.85), cc[0], cc[1], cc[2]]); }
+    for (let n = 0; n < 2100; n++) { const x = cx + sr(0, CS), z = cz + sr(0, CS), h = terrainH(x, z); if (h < -1.2 || Math.hypot(x, z) < 25) continue; landColor(x, z, h, cc); if (cc[3] > 0.35 || cc[4] > 0.4) continue; if (env.PLACES.some(pl => pl.type === 'dorf' && pl.r < 50 && Math.hypot(x - pl.x, z - pl.z) < 13)) continue; const zn = zoneAt(x, z, 1.0); if ((zn === 'fels' && sr() < 0.8) || ((zn === 'glut' || zn === 'vulkan') && sr() < 0.93) || (zn === 'ruinen' && sr() < 0.7)) continue; if (n < 90 && (zn === 'wiese' || zn === '' || zn === 'hain' || zn === 'moor')) F.push([x, h, z, sr(0.9, 1.5)]); else G.push([x, h, z, sr(1.5, 2.6), sr(0.4, 0.85), cc[0], cc[1], cc[2]]); }
     for (const i of ISLANDS) if (i.x > cx - i.r && i.x < cx + CS + i.r && i.z > cz - i.r && i.z < cz + CS + i.r) for (let n = 0; n < 900; n++) { const x = cx + sr(0, CS), z = cz + sr(0, CS); if (Math.hypot(x - i.x, z - i.z) < i.r - 1.5) (n % 12 ? G : F).push([x, i.y, z, sr(1.1, 1.9), sr(0.45, 1.0), 0.34, 0.6, 0.24]); }
     const mk = (arr, mat, isG) => { if (!arr.length) return; const im = new T.InstancedMesh(tuft, mat, arr.length); arr.forEach((o, i) => { dm.position.set(o[0], o[1] - 0.05, o[2]); dm.rotation.set(0, sr(0, 3.14), 0); isG ? dm.scale.set(o[3], o[4], o[3]) : dm.scale.setScalar(o[3]); dm.updateMatrix(); im.setMatrixAt(i, dm.matrix); if (isG) { col.setRGB(o[5], o[6], o[7], T.SRGBColorSpace); const b = sr(1.35, 1.75); im.setColorAt(i, col.multiplyScalar(b)); } }); im.receiveShadow = true; im.userData.c = [cx + CS / 2, cz + CS / 2]; scene.add(im); grassCells.push(im); };
     mk(G, gMat, true); mk(F, fMat, false);
   }
-  buildTown();
+  buildTown(); buildPlaces(env.PLACES);
   // Wolken
   for (let k = 0; k < 30; k++) { const g = new T.Group(), n = 5 + Math.floor(sr(0, 5)), sc = sr(0.7, 1.5); for (let q = 0; q < n; q++) { const low = q % 2, s = new T.Sprite(new T.SpriteMaterial({ map: TX.soft, color: low ? 0xc9d6ea : 0xffffff, transparent: true, opacity: low ? 0.75 : 0.95, depthWrite: false, fog: false })); s.scale.set(sr(70, 120) * sc, sr(42, 66) * sc, 1); s.position.set((q - n / 2) * 30 * sc + sr(-8, 8), low ? -9 * sc : sr(0, 12) * sc, sr(-16, 16)); g.add(s); } g.position.set(sr(-1100, 1100), k < 8 ? sr(30, 52) : sr(150, 320), sr(-1100, 1100)); scene.add(g); clouds.push(g); }
   // Ferne Inseln am Horizont
@@ -321,8 +322,8 @@ function buildTown() {
   const { terrainH } = env, town = new T.Group(); scene.add(town); const Y = 1.5;
   const plaza = new T.Mesh(new T.CircleGeometry(25, 48), new T.MeshStandardMaterial({ map: TX.cobble, roughness: 0.9 })); plaza.rotation.x = -PI / 2; plaza.position.y = Y + 0.06; plaza.receiveShadow = true; town.add(plaza); groundMeshes.push(plaza);
   const roofs = [0xb8433a, 0x3f66c4, 0x3f8f52, 0xc98f2e, 0x7a4fb8, 0xa8483a];
-  for (let k = 0; k < 6; k++) {
-    const a = k / 6 * PI * 2 + 0.52, x = Math.cos(a) * 34, z = Math.sin(a) * 34, w = 9 + (k % 3), d = 8 + (k % 2) * 1.5, h = 5 + (k % 2) * 1.2, rh = w * 0.52, g = new T.Group(), ps = [];
+  houseFn = (k, x, z, ry) => {
+    const w = 9 + (k % 3), d = 8 + (k % 2) * 1.5, h = 5 + (k % 2) * 1.2, rh = w * 0.52, g = new T.Group(), ps = [];
     ps.push(pc('box', 0xa8a39a, [0, 0.5, 0], [w + 0.5, 1, d + 0.5], null, 'stone'), pc('box', 0xffffff, [0, 1 + h / 2, 0], [w, h, d], null, 'plaster'));
     ps.push(pc(roofGeo(w + 1.6, d + 1.4, rh), roofs[k], [0, 1 + h, 0], null, null, 'roof'), pc('box', 0x5a3d26, [0, 1 + h + rh, 0], [0.4, 0.4, d + 1.6], null, 'wood'));
     for (const sx of [-1, 1]) ps.push(pc('box', 0x5a3d26, [sx * (w / 2 + 0.72), 1 + h + 0.05, 0], [0.3, 0.3, d + 1.5], null, 'wood'));
@@ -332,8 +333,10 @@ function buildTown() {
     const win = (wx, wy, wz, ry) => { const q = [pc('box', 0xffe2a0, [0, 0, 0], [1.5, 1.6, 0.1], null, 'glow', { top: 0xfff6d8 }), pc('box', 0x40291a, [0, 0, 0.03], [0.12, 1.7, 0.12], null, 'wood'), pc('box', 0x40291a, [0, 0, 0.03], [1.6, 0.12, 0.12], null, 'wood'), pc('box', 0x40291a, [0, 0.87, 0.02], [1.8, 0.16, 0.2], null, 'wood'), pc('box', 0x40291a, [0, -0.87, 0.06], [1.9, 0.18, 0.4], null, 'wood'), pc('box', roofs[(k + 2) % 6], [-1.12, 0, 0.03], [0.6, 1.7, 0.1], null, 'matte'), pc('box', roofs[(k + 2) % 6], [1.12, 0, 0.03], [0.6, 1.7, 0.1], null, 'matte')]; for (let i = 0; i < 5; i++) q.push(pc('sph', [0xff6f91, 0xffd84a, 0xffffff][i % 3], [-0.7 + i * 0.35, -0.68, 0.22], 0.26, null, 'matte'), pc('sph', 0x3f8f3a, [-0.6 + i * 0.3, -0.78, 0.16], 0.3, null, 'matte')); return xf(q, [wx, wy, wz], [0, ry, 0]); };
     ps.push(win(-w * 0.3, 3.4, fz + 0.03, 0), win(w * 0.3, 3.4, fz + 0.03, 0), win(w / 2 + 0.03, 3.4, 0, PI / 2), win(-w / 2 - 0.03, 3.4, 0, -PI / 2));
     if (k % 2) ps.push(pc('box', 0xffe2a0, [0, 1 + h + rh * 0.38, fz + 0.72], [1.1, 1.1, 0.1], null, 'glow'), pc('box', 0x40291a, [0, 1 + h + rh * 0.38, fz + 0.75], [1.3, 0.12, 0.12], null, 'wood'));
-    build(g, ps).forEach(m => { m.receiveShadow = true; blockers.push(m); }); g.position.set(x, terrainH(x, z) - 0.25, z); g.rotation.y = Math.atan2(-x, -z); town.add(g); colliders.push({ x, z, r: Math.max(w, d) / 2 + 0.9 });
-  }
+    build(g, ps).forEach(m => { m.receiveShadow = true; blockers.push(m); }); g.position.set(x, terrainH(x, z) - 0.25, z); g.rotation.y = ry; town.add(g); colliders.push({ x, z, r: Math.max(w, d) / 2 + 0.9 });
+  };
+  for (let k = 0; k < 6; k++) { const a = k / 6 * PI * 2 + 0.52, x = Math.cos(a) * 34, z = Math.sin(a) * 34; houseFn(k, x, z, Math.atan2(-x, -z)); }
+  [0.55, 1.95, 2.9, 3.75, 4.7, 4.98, 6.05].forEach((a, i) => { const r = 64 + (i % 2) * 5, x = Math.cos(a) * r, z = Math.sin(a) * r; houseFn((i + 3) % 6, x, z, Math.atan2(-x, -z) + (i % 3 - 1) * 0.25); });
   // Monument mit schwebendem Kristall
   const mon = new T.Group(); mon.position.y = Y; town.add(mon); const mp = [pc('cyl', 0xb9b4a8, [0, 0.3, 0], [9, 0.6, 9], null, 'stone'), pc('cyl', 0xcac5b8, [0, 0.8, 0], [6.4, 0.5, 6.4], null, 'stone'), pc('cyl', 0xdad5c8, [0, 1.25, 0], [4, 0.5, 4], null, 'stone'), pc('cyl', 0x2a86c4, [0, 1.06, 0], [5.6, 0.06, 5.6], null, 'gloss')];
   for (let i = 0; i < 4; i++) { const a = i * PI / 2 + PI / 4, x = Math.cos(a) * 3.6, z = Math.sin(a) * 3.6; mp.push(pc('cyl', 0xd8d2c2, [x, 2.4, z], [0.7, 3.6, 0.7], null, 'stone'), pc('box', 0xc8c2b2, [x, 4.3, z], [1.1, 0.3, 1.1], null, 'stone'), pc('oct', 0x7fe4ff, [x, 5.0, z], [0.6, 1, 0.6], null, 'glow'), pc('box', 0x7fe4ff, [x * 0.92, 2.6, z * 0.92], [0.12, 1.6, 0.12], null, 'glow')); }
@@ -344,7 +347,7 @@ function buildTown() {
   // Laternen, Zäune, Stände
   const props = [];
   for (let i = 0; i < 8; i++) { const a = i / 8 * PI * 2, x = Math.cos(a) * 23, z = Math.sin(a) * 23; props.push(xf([pc('cyl', 0x2c2c34, [0, 2, 0], [0.22, 4, 0.22], null, 'metal'), pc('cyl', 0x2c2c34, [0, 0.15, 0], [0.7, 0.3, 0.7], null, 'metal'), pc('box', 0x2c2c34, [0.45, 3.9, 0], [1, 0.12, 0.12], null, 'metal'), pc('box', 0xffe2a0, [0.9, 3.45, 0], [0.5, 0.65, 0.5], null, 'glow', { top: 0xffffff }), pc('cone4', 0x2c2c34, [0.9, 3.95, 0], [0.8, 0.4, 0.8], [0, PI / 4, 0], 'metal')], [x, Y, z], [0, -a + PI, 0])); const gl = glow(0xffc870, 6, 0.5); gl.position.set(x - Math.cos(a) * 0.9, Y + 3.45, z - Math.sin(a) * 0.9); town.add(gl); }
-  for (let i = 0; i < 40; i++) { const a = i / 40 * PI * 2; if (i % 8 < 2) continue; const x = Math.cos(a) * 47, z = Math.sin(a) * 47, y = terrainH(x, z); props.push(xf([pc('cyl6', 0x7a5a3c, [0, 0.8, 0], [0.32, 1.7, 0.32], null, 'wood'), pc('box', 0x8a6a48, [0, 1.15, 3.6], [0.14, 0.24, 7.3], null, 'wood'), pc('box', 0x8a6a48, [0, 0.6, 3.6], [0.14, 0.24, 7.3], null, 'wood')], [x, y - 0.1, z], [0, -a, 0])); }
+  for (let i = 0; i < 68; i++) { const a = i / 68 * PI * 2; if (i % 8 < 2) continue; const x = Math.cos(a) * 80, z = Math.sin(a) * 80, y = terrainH(x, z); props.push(xf([pc('cyl6', 0x7a5a3c, [0, 0.8, 0], [0.32, 1.7, 0.32], null, 'wood'), pc('box', 0x8a6a48, [0, 1.15, 3.6], [0.14, 0.24, 7.3], null, 'wood'), pc('box', 0x8a6a48, [0, 0.6, 3.6], [0.14, 0.24, 7.3], null, 'wood')], [x, y - 0.1, z], [0, -a, 0])); }
   const barrel = (x, z) => xf([pc(lathe([[0.01, 0], [0.5, 0], [0.62, 0.6], [0.5, 1.2], [0.01, 1.2]], 12), 0x9a7248, null, null, null, 'wood'), pc('tor', 0x3a3a42, [0, 0.3, 0], [1.15, 1.15, 0.5], [PI / 2, 0, 0], 'metal'), pc('tor', 0x3a3a42, [0, 0.9, 0], [1.15, 1.15, 0.5], [PI / 2, 0, 0], 'metal')], [x, Y, z]);
   const crate = (x, z, s, fr) => { const q = [pc('box', 0xb08a58, [0, s / 2, 0], [s, s, s], null, 'wood')]; if (fr !== undefined) for (let i = 0; i < 7; i++) q.push(pc('sph', fr, [((i % 3) - 1) * s * 0.28, s + 0.08, (Math.floor(i / 3) - 1) * s * 0.28], s * 0.34, null, 'gloss')); return xf(q, [x, Y, z], [0, sr(0, 1), 0]); };
   // Marktstand (Tessa)
@@ -361,7 +364,41 @@ function buildTown() {
   props.push(xf([pc('box', 0x7a5a3c, [0, 0.9, 0], [3.6, 0.2, 0.3], null, 'wood'), pc('cyl6', 0x7a5a3c, [-1.7, 0.5, 0], [0.2, 1, 0.2], null, 'wood'), pc('cyl6', 0x7a5a3c, [1.7, 0.5, 0], [0.2, 1, 0.2], null, 'wood'), [0, 1, 2].map(i => [pc('sph', [0x4fc0a8, 0xffd23c, 0xe0607a][i], [-1.1 + i * 1.1, 1.5, 0.25], [0.7, 2.6, 0.14], [0.22, 0, 0], 'gloss'), pc('sph', 0xbff8ff, [-1.1 + i * 1.1, 1.5, 0.18], [0.3, 2.0, 0.08], [0.22, 0, 0], 'glow')]), pc('cyl', 0xdfe6f2, [3, 3.5, 0], [0.14, 7, 0.14], null, 'metal'), pc('cone', 0xff7a3a, [3.9, 6.6, 0], [0.7, 2, 0.7], [0, 0, -PI / 2], 'cloth', { top: 0xffffff })], [23, Y, 7], [0, -1.2, 0]));
   // Bank & Aushang (Mira)
   props.push(xf([pc('box', 0x9a7248, [0, 0.6, 0], [3, 0.16, 0.9], null, 'wood'), pc('box', 0x9a7248, [0, 1.15, -0.4], [3, 0.7, 0.12], null, 'wood'), pc('box', 0x6a4a2c, [-1.3, 0.3, 0], [0.16, 0.6, 0.8], null, 'wood'), pc('box', 0x6a4a2c, [1.3, 0.3, 0], [0.16, 0.6, 0.8], null, 'wood')], [10, Y, 15], [0, 2.6, 0]), xf([pc('cyl6', 0x6a4a2c, [-1.2, 1.3, 0], [0.2, 2.6, 0.2], null, 'wood'), pc('cyl6', 0x6a4a2c, [1.2, 1.3, 0], [0.2, 2.6, 0.2], null, 'wood'), pc('box', 0x9a7248, [0, 1.9, 0], [2.6, 1.6, 0.14], null, 'wood'), pc(roofGeo(3.2, 0.8, 0.5), 0xb8433a, [0, 2.75, 0], null, null, 'roof'), [[-0.7, 2.1, 0xfff6dc], [0.1, 1.8, 0xffe9b0], [0.75, 2.15, 0xf2efe6]].map(q => pc('box', q[2], [q[0], q[1], 0.09], [0.6, 0.75, 0.02], [0, 0, sr(-0.15, 0.15)], 'matte'))], [2, Y, 16], [0, 2.9, 0]));
+  // Erweiterung: Brunnen, Windmühle, Felder, weitere Laternen
+  props.push(xf([pc('cyl', 0x9a948a, [0, 0.6, 0], [3.2, 1.2, 3.2], null, 'stone'), pc('cyl', 0x2a86c4, [0, 1.16, 0], [2.6, 0.1, 2.6], null, 'gloss'), pc('cyl6', 0x6a4a2c, [-1.3, 2.2, 0], [0.24, 3.2, 0.24], null, 'wood'), pc('cyl6', 0x6a4a2c, [1.3, 2.2, 0], [0.24, 3.2, 0.24], null, 'wood'), pc(roofGeo(3.8, 2.4, 1.1), 0x3f66c4, [0, 3.7, 0], null, null, 'roof'), pc('cyl', 0x7a5236, [0, 3.2, 0], [0.3, 2.6, 0.3], [0, 0, PI / 2], 'wood')], [12, Y, 50])); colliders.push({ x: 12, z: 50, r: 2.6 });
+  for (const [fx0, fz0, fr] of [[40, -60, 0.9], [-42, 54, 0.4], [70, 10, 0.1]]) { const q = [pc('box', 0x5a3d26, [0, 0.1, 0], [12, 0.2, 8], null, 'matte')]; for (let i = 0; i < 5; i++) for (let k = 0; k < 7; k++) q.push(pc('sph', [0x5fc04a, 0x3f9a3a, 0xffc23a][i % 3], [-4.6 + k * 1.55, 0.42, -3 + i * 1.5], [0.7, 0.6, 0.7], null, 'matte')); props.push(xf(q, [fx0, Y, fz0], [0, fr, 0])); }
+  for (let i = 0; i < 10; i++) { const a = i / 10 * PI * 2 + 0.3, x = Math.cos(a) * 50, z = Math.sin(a) * 50; props.push(xf([pc('cyl', 0x2c2c34, [0, 2, 0], [0.22, 4, 0.22], null, 'metal'), pc('box', 0xffe2a0, [0, 4.3, 0], [0.5, 0.65, 0.5], null, 'glow', { top: 0xffffff }), pc('cone4', 0x2c2c34, [0, 4.8, 0], [0.8, 0.4, 0.8], [0, PI / 4, 0], 'metal')], [x, Y, z])); const gl = glow(0xffc870, 6, 0.45); gl.position.set(x, Y + 4.3, z); town.add(gl); }
+  const mill = new T.Group(); mill.position.set(-61, Y, -10); town.add(mill); build(mill, [pc('taper', 0xefe3c6, [0, 5, 0], [9, 10, 9], null, 'plaster'), pc('cone', 0xb8433a, [0, 11.6, 0], [7, 3.4, 7], null, 'roof'), pc('box', 0x7a5232, [0, 1.5, 2.9], [1.6, 3, 0.3], null, 'wood'), pc('cyl', 0x5a3d26, [0, 9, 3.2], [0.5, 1.6, 0.5], [PI / 2, 0, 0], 'wood')]).forEach(m => { m.receiveShadow = true; blockers.push(m); }); colliders.push({ x: -61, z: -10, r: 4.2 });
+  const blades = new T.Group(); blades.position.set(0, 9, 4); mill.add(blades); build(blades, [0, 1, 2, 3].map(i => xf([pc('box', 0x5a3d26, [0, 3.6, 0], [0.25, 7.2, 0.2], null, 'wood'), pc('box', 0xf2efe6, [0.9, 4.4, 0], [1.6, 5, 0.06], null, 'cloth')], null, [0, 0, i * PI / 2]))); mill.rotation.y = 1.4; anims.push(t => { blades.rotation.z = t * 0.7; });
   build(town, props).forEach(m => { m.receiveShadow = true; });
+}
+// Weitere Dörfer und kleine Stationen
+function buildPlaces(places) {
+  for (const pl of places) {
+    if (pl.id === 'luminhafen') continue; const g = new T.Group(), Y = env.terrainH(pl.x, pl.z), ps = [], P = (q, x, z, ry) => ps.push(xf(q, [pl.x + x, Y, pl.z + z], [0, ry || 0, 0])); scene.add(g);
+    const lamp = (x, z) => { P([pc('cyl', 0x2c2c34, [0, 1.8, 0], [0.2, 3.6, 0.2], null, 'metal'), pc('box', 0xffe2a0, [0, 3.9, 0], [0.46, 0.6, 0.46], null, 'glow', { top: 0xffffff }), pc('cone4', 0x2c2c34, [0, 4.35, 0], [0.75, 0.36, 0.75], [0, PI / 4, 0], 'metal')], x, z); const gl = glow(0xffc870, 5.5, 0.45); gl.position.set(pl.x + x, Y + 3.9, pl.z + z); g.add(gl); };
+    const flag = (x, z, c) => P([pc('cyl', 0x4a3a2a, [0, 3.5, 0], [0.18, 7, 0.18], null, 'wood'), pc('sph', 0xd9b765, [0, 7.1, 0], 0.36, null, 'metal'), pc('box', c, [0.8, 5.9, 0], [1.5, 1.7, 0.06], null, 'cloth', { top: 0xffffff })], x, z, sr(0, 3));
+    if (pl.type === 'dorf') {
+      const plaza = new T.Mesh(new T.CircleGeometry(13, 36), new T.MeshStandardMaterial({ map: TX.cobble, roughness: 0.9 })); plaza.rotation.x = -PI / 2; plaza.position.set(pl.x, Y + 0.07, pl.z); plaza.receiveShadow = true; g.add(plaza); groundMeshes.push(plaza);
+      for (let k = 0; k < 5; k++) { const a = k / 5 * PI * 2 + 0.3, x = pl.x + Math.cos(a) * 21, z = pl.z + Math.sin(a) * 21; houseFn((k + 2) % 6, x, z, Math.atan2(pl.x - x, pl.z - z)); }
+      P([pc('cyl', 0x9a948a, [0, 0.6, 0], [3, 1.2, 3], null, 'stone'), pc('cyl', 0x2a86c4, [0, 1.16, 0], [2.4, 0.1, 2.4], null, 'gloss'), pc('cyl6', 0x6a4a2c, [-1.2, 2.2, 0], [0.24, 3.2, 0.24], null, 'wood'), pc('cyl6', 0x6a4a2c, [1.2, 2.2, 0], [0.24, 3.2, 0.24], null, 'wood'), pc(roofGeo(3.6, 2.2, 1), 0xb8433a, [0, 3.7, 0], null, null, 'roof')], 0, 0); colliders.push({ x: pl.x, z: pl.z, r: 2.4 });
+      for (let k = 0; k < 5; k++) { const a = k / 5 * PI * 2 + 0.93; lamp(Math.cos(a) * 13.5, Math.sin(a) * 13.5); } flag(-5, 9, 0x3a6ad6); flag(5, 9, 0xd6453c);
+      for (let i = 0; i < 30; i++) { const a = i / 30 * PI * 2; if (i % 6 < 2) continue; const x = Math.cos(a) * 33, z = Math.sin(a) * 33; ps.push(xf([pc('cyl6', 0x7a5a3c, [0, 0.8, 0], [0.32, 1.7, 0.32], null, 'wood'), pc('box', 0x8a6a48, [0, 1.15, 3.4], [0.14, 0.24, 6.9], null, 'wood'), pc('box', 0x8a6a48, [0, 0.6, 3.4], [0.14, 0.24, 6.9], null, 'wood')], [pl.x + x, env.terrainH(pl.x + x, pl.z + z) - 0.1, pl.z + z], [0, -a, 0])); }
+      P([pc('box', 0x9a7248, [0, 1.1, 0], [4.4, 0.2, 2], null, 'wood'), [-2, 2].map(x => pc('cyl6', 0x6a4a2c, [x, 1.7, -0.9], [0.2, 3.4, 0.2], null, 'wood')), [0, 1, 2, 3].map(i => pc('box', i % 2 ? 0xf2efe6 : 0x3f8f52, [-1.65 + i * 1.1, 3.3, 0], [1.1, 0.1, 2.6], [0.28, 0, 0], 'matte')), [0, 1, 2].map(i => pc('sph', [0xff4a3a, 0xffa030, 0x8fd040][i], [-1.2 + i * 1.2, 1.42, 0.1], 0.4, null, 'gloss'))], -9, -4, 1.1);
+    } else {
+      P([[0, 1, 2, 3, 4, 5, 6].map(i => pc('rock', 0x8a8680, [Math.cos(i * 0.9) * 1.1, 0.2, Math.sin(i * 0.9) * 1.1], 0.55, null, 'stone')), pc('cyl', 0x4a3220, [0, 0.3, 0], [0.24, 1.5, 0.24], [0, 0, 1.2], 'wood'), pc('cyl', 0x4a3220, [0, 0.3, 0], [0.24, 1.5, 0.24], [1.2, 0.8, 0], 'wood'), pc('cone', 0xff9a3a, [0, 0.9, 0], [0.9, 1.5, 0.9], null, 'glow', { top: 0xfff0a0 })], 0, 0);
+      const fg = glow(0xff8a3a, 7, 0.6); fg.position.set(pl.x, Y + 1.2, pl.z); g.add(fg); anims.push(() => { if (Math.random() < 0.3 && camera.position.distanceToSquared(fg.position) < 12000) pAdd.emit({ x: pl.x + rnd(-0.4, 0.4), y: Y + 1.2, z: pl.z + rnd(-0.4, 0.4), n: 1, vy: 2.4, vs: 0.5, life: 1.3, size: 0.35, c: 0xffa040, c2: 0xff3010 }); });
+      for (const [a, c] of [[0.6, 0xd8c8a0], [2.5, 0xb8433a]]) { const x = Math.cos(a) * 6.5, z = Math.sin(a) * 6.5; P([pc('cone4', c, [0, 1.9, 0], [5.4, 3.8, 5.4], [0, PI / 4, 0], 'cloth', { g: 0.3 }), pc('box', 0x2a201c, [0, 1.1, 1.9], [1.3, 2.2, 0.1], [-0.42, 0, 0], 'matte'), pc('cyl', 0x6a4a2c, [0, 4, 0], [0.12, 0.9, 0.12], null, 'wood')], x, z, -a + PI / 2); colliders.push({ x: pl.x + x, z: pl.z + z, r: 2.6 }); }
+      P([[-1.4, 1.4].map(x => [-1.4, 1.4].map(z => pc('cyl6', 0x6a4a2c, [x, 3.2, z], [0.3, 6.4, 0.3], null, 'wood'))), pc('box', 0x8a6a48, [0, 5.4, 0], [3.6, 0.25, 3.6], null, 'wood'), [-1.7, 1.7].map(x => pc('box', 0x8a6a48, [x, 6, 0], [0.15, 0.2, 3.6], null, 'wood')), [-1.7, 1.7].map(z => pc('box', 0x8a6a48, [0, 6, z], [3.6, 0.2, 0.15], null, 'wood')), pc(roofGeo(4.6, 4.4, 1.5), 0x5a3d26, [0, 7.4, 0], null, null, 'roof')], -7, -5, 0.4); colliders.push({ x: pl.x - 7, z: pl.z - 5, r: 2.2 });
+      P([pc('box', 0xb08a58, [0, 0.5, 0], [1, 1, 1], null, 'wood'), pc('box', 0xb08a58, [1.2, 0.4, 0.3], [0.8, 0.8, 0.8], [0, 0.5, 0], 'wood'), pc(lathe([[0.01, 0], [0.5, 0], [0.62, 0.6], [0.5, 1.2], [0.01, 1.2]], 12), 0x9a7248, [-1.3, 0, 0.2], null, null, 'wood')], 5, -6, 0.7); flag(-2, 8, 0xffc23a); lamp(7, 4); lamp(-8, 3);
+    }
+    build(g, ps).forEach(m => { m.receiveShadow = true; });
+  }
+}
+function waystone(color = 0x7fe8ff) {
+  const g = new T.Group(); build(g, [pc('cyl', 0x9a948a, [0, 0.25, 0], [3.4, 0.5, 3.4], null, 'stone'), pc('cyl6', 0x8a8f9a, [0, 2.3, 0], [1.1, 3.8, 1.1], null, 'stone', { g: 0.3 }), pc('cone', 0x8a8f9a, [0, 4.5, 0], [1.1, 0.9, 1.1], null, 'stone'), pc('box', color, [0, 2.3, 0.5], [0.12, 2.2, 0.06], null, 'glow'), pc('box', color, [0, 2.9, 0.5], [0.7, 0.12, 0.06], null, 'glow'), pc('box', color, [0, 2.3, -0.5], [0.12, 2.2, 0.06], null, 'glow'), pc('box', color, [0.5, 2.3, 0], [0.06, 2.2, 0.12], null, 'glow'), pc('box', color, [-0.5, 2.3, 0], [0.06, 2.2, 0.12], null, 'glow')]);
+  const c = new T.Group(); build(c, [pc('oct', color, null, [0.7, 1.3, 0.7], null, 'glow', { top: 0xffffff })]); c.add(glow(color, 5, 0.6)); g.add(c); const ru = flat(TX.rune, color, 5.4); ru.position.y = 0.56; ru.material.opacity = 0.7; g.add(ru);
+  anims.push(t => { c.position.y = 5.9 + Math.sin(t * 1.6) * 0.25; c.rotation.y = t; ru.rotation.z = t * 0.4; }); scene.add(g); return g;
 }
 
 /* ---------- Stimmung (Himmel, Licht, Nebel) ---------- */
@@ -483,6 +520,6 @@ function frame(dt, time, f, zone) {
   fpsT += dt; fpsN++; if (fpsT > 4) { const fps = fpsN / fpsT; fpsT = 0; fpsN = 0; if (fps < 22 && time > 8 && quality !== 'niedrig' && api.auto) { setQuality(quality === 'hoch' ? 'mittel' : 'niedrig'); if (api.onQuality) api.onQuality(quality); } }
 }
 
-const api = { init, frame, setQuality, setMood, dungeon, portal, fx, projectile, loot, selection, glow, pc, build, parts, mirror, xf, lathe, tube, tex, auto: true, get quality() { return quality; }, get scene() { return scene; }, get camera() { return camera; }, get renderer() { return renderer; }, groundMeshes, blockers, colliders, B, M, TX, particles: () => ({ add: pAdd, norm: pNorm }), T, lerp, clamp, rnd };
+const api = { init, frame, setQuality, setMood, dungeon, portal, waystone, landColor, fx, projectile, loot, selection, glow, pc, build, parts, mirror, xf, lathe, tube, tex, auto: true, get quality() { return quality; }, get scene() { return scene; }, get camera() { return camera; }, get renderer() { return renderer; }, groundMeshes, blockers, colliders, B, M, TX, particles: () => ({ add: pAdd, norm: pNorm }), T, lerp, clamp, rnd };
 return api;
 })();

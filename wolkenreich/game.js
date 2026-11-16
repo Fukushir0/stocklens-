@@ -1,7 +1,7 @@
 'use strict';
 /* Wolkenreich – Engine */
 (() => {
-const { CLASSES, SPECS, SKILLS, RAR, SETS, SETF, UPCHANCE, DUNGEONS, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed } = WR;
+const { CLASSES, SPECS, SKILLS, RAR, SETS, SETF, UPCHANCE, DUNGEONS, PLACES, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed } = WR;
 const $ = s => document.querySelector(s);
 const rnd = (a, b) => a + Math.random() * (b - a);
 const rint = (a, b) => Math.floor(rnd(a, b + 1));
@@ -11,11 +11,18 @@ const SAVE_KEY = 'wolkenreich_save_v1';
 const WATER = -3;
 
 /* ---------- Welt-Geometrie ---------- */
-function terrainH(x, z) {
+function rawH(x, z) {
   const d = Math.hypot(x, z);
   let h = 7 * Math.sin(x * 0.013) * Math.cos(z * 0.011) + 3.5 * Math.sin(x * 0.031 + 1.3) * Math.sin(z * 0.027 + 0.5) + 0.8 * Math.sin(x * 0.09) * Math.cos(z * 0.08);
-  h = h * smooth(30, 90, d) + 1.5;
+  h = h * smooth(84, 135, d) + 1.5;
   h -= smooth(400, 480, d) * 40;
+  return h;
+}
+for (const pl of PLACES) pl.h = rawH(pl.x, pl.z);
+// Dörfer und Stationen stehen auf eingeebnetem Boden
+function terrainH(x, z) {
+  let h = rawH(x, z);
+  for (const pl of PLACES) if (pl.id !== 'luminhafen') { const d = Math.hypot(x - pl.x, z - pl.z); if (d < pl.r + 22) h += (pl.h - h) * (1 - smooth(pl.r, pl.r + 22, d)); }
   return h;
 }
 function islandAt(x, z) { for (const i of ISLANDS) if (Math.hypot(x - i.x, z - i.z) < i.r - 0.5) return i; return null; }
@@ -36,7 +43,7 @@ function groundAt(x, z, y) {
 
 /* ---------- Grafik ---------- */
 const canvas = $('#c');
-GFX.init(canvas, { terrainH, ZONES, ISLANDS, WATER });
+GFX.init(canvas, { terrainH, ZONES, ISLANDS, WATER, PLACES });
 const scene = GFX.scene, camera = GFX.camera, groundMeshes = GFX.groundMeshes, fx = GFX.fx, ring = fx.ring;
 const FLOATERS = { wisp: 1, ghost: 1, guardian: 1 };
 const pickMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }), pickGeo = new THREE.SphereGeometry(0.5, 8, 6);
@@ -47,7 +54,7 @@ function runTimers(dt) { for (let i = timers.length - 1; i >= 0; i--) { timers[i
 
 /* ---------- Spielzustand ---------- */
 const p = {
-  name: 'Wanderer', hair: HAIRS[0], cls: 'wanderer', spec: null, dun: null, lvl: 1, exp: 0, gold: 50, sp: 0,
+  name: 'Wanderer', hair: HAIRS[0], cls: 'wanderer', spec: null, dun: null, wp: ['luminhafen'], lvl: 1, exp: 0, gold: 50, sp: 0,
   stats: { str: 10, sta: 10, dex: 10, int: 10 }, inv: [], equip: { weapon: null, armor: null, board: null },
   q: { i: 0, on: false, prog: 0 }, hp: 1, mp: 1,
   x: 0, y: 2, z: 16, vy: 0, rot: Math.PI, onGround: true, flying: false, dead: false,
@@ -212,8 +219,10 @@ function shopHtml(ids) {
   return ids.map(id => { const it = ITEMS[id]; return `<div class="shoprow" data-tip="${esc(itemTip(id))}"><span class="ic">${it.icon}</span><span class="nm">${it.name}<small>${it.atk ? 'Angriff ' + it.atk : it.def ? 'Verteidigung ' + it.def : it.hp ? '+' + it.hp + ' Leben' : it.mp ? '+' + it.mp + ' Mana' : 'Tempo ' + it.speed}${it.lvl > 1 ? ' · St. ' + it.lvl : ''}</small></span><button data-buy="${id}" ${p.gold < it.price ? 'disabled' : ''}>${it.price.toLocaleString('de-DE')} 💰</button></div>`; }).join('');
 }
 function upgradeInfo(slot) { const e = p.equip[slot]; if (!e) return null; const pl = e.plus || 0; return { e, pl, cost: Math.round(ITEMS[e.id].price * 0.12 * (pl + 1)) + 50, chance: UPCHANCE[pl] || 0, stones: 1 + Math.floor(pl / 3), scrolls: pl >= 7 ? 2 : pl >= 3 ? 1 : 0 }; }
+for (const pl of PLACES) (pl.npcs || []).forEach((q, i) => { const a = 2.2 + i * 1.5, r = pl.type === 'dorf' ? 8 : 4.5; NPCS.push({ id: pl.id + i, kind: q[0], name: q[1], role: q[0] === 'tessa' ? 'Laden' : 'Verbesserung', x: pl.x + Math.cos(a) * r, z: pl.z + Math.sin(a) * r, hair: q[2], face: [pl.x, pl.z] }); });
 const portals = [];
 function buildDungeons() {
+  for (const pl of PLACES) { const o = pl.id === 'luminhafen' ? [15, 23] : pl.type === 'dorf' ? [0, 9] : [3.5, 5], x = pl.x + o[0], z = pl.z + o[1], g = GFX.waystone(); g.position.set(x, terrainH(x, z), z); const q = { portal: true, wp: pl, x, y: terrainH(x, z) - 1.4, z, name: 'Wegstein', role: pl.name }; q.pick = addPick(g, 2.6, 3.4, 5.6, q, 'npc'); const l = document.createElement('div'); l.className = 'lbl'; l.innerHTML = `Wegstein<small>${pl.name} · Schnellreise</small>`; $('#labels').appendChild(l); q.lbl = l; portals.push(q); pl.stone = q; }
   const mk = (x, y, z, col, name, sub, o) => { const g = GFX.portal(col); g.position.set(x, y, z); g.rotation.y = o.ry || 0; const q = Object.assign({ portal: true, x, y, z, name, role: sub }, o); q.pick = addPick(g, 2.6, 4.6, 5.4, q, 'npc'); const l = document.createElement('div'); l.className = 'lbl'; l.innerHTML = `${name}<small>${sub}</small>`; $('#labels').appendChild(l); q.lbl = l; portals.push(q); return q; };
   DUN.forEach((d, i) => {
     d.gates = GFX.dungeon(d); d.locks = []; const a = 0.98 + i * Math.PI / 2, x = Math.cos(a) * 58, z = Math.sin(a) * 58; d.px = x; d.pz = z;
@@ -223,31 +232,38 @@ function buildDungeons() {
     spawnMob(d.boss, { x: rb.x, z: rb.z, r: rb.r - 3, y: d.y, isl: true, dun: d, ri: 4 });
   });
 }
+function travelTo(pl) {
+  if (p.dun) { p.dun = null; GFX.setMood(null); } const st = pl.stone; p.flying = false; p.x = st.x + 2.5; p.z = st.z + 2.5; p.y = terrainH(p.x, p.z); p.vy = 0; p.moveTo = null; p.attacking = false; p.interact = null; setTarget(null);
+  for (const m of mobs) if (m.state === 'chase') m.state = 'return'; ring(p.x, p.y, p.z, 0x9ff0ff, 6); beep(520, 0.4, 'sine', 0.06, 400); log(`Du reist nach ${pl.name}.`, 'g'); zoneName = ''; hudT = 0; curNpc = null; showWin('winNpc', false); showWin('winMap', false); save();
+}
 function usePortal(q) {
+  if (q.wp) { if (!p.wp.includes(q.wp.id)) p.wp.push(q.wp.id); curNpc = q; shopOpen = false; $('#npcTitle').textContent = `Wegstein – ${q.wp.name}`;
+    $('#npcBody').innerHTML = 'Die Wegsteine verbinden alle Orte, die du schon besucht hast. Wohin möchtest du reisen?' + PLACES.map(pl => `<div class="shoprow"><span class="ic">${pl.type === 'dorf' ? '🏠' : '⛺'}</span><span class="nm">${p.wp.includes(pl.id) ? pl.name : '<span class="muted">??? (noch nicht entdeckt)</span>'}<small>${pl.type === 'dorf' ? 'Dorf' : 'Station'}</small></span>${pl === q.wp ? '<span class="muted">hier</span>' : p.wp.includes(pl.id) ? `<button data-wp="${pl.id}">Reisen</button>` : ''}</div>`).join('') + '<div class="muted" style="margin-top:6px">Tipp: Die Karte (M) zeigt alle Orte.</div>';
+    return showWin('winNpc', true); }
   if (q.enter) { const d = q.enter; if (p.lvl < d.lvl) return log(`${d.name}: Du brauchst mindestens Stufe ${d.lvl}.`, 'r'); p.dun = d; p.flying = false; p.x = d.rooms[0].x; p.z = d.rooms[0].z + 3; p.y = d.y; p.rot = 0; cam.yaw = Math.PI; GFX.setMood(d.mood); log(`Du betrittst: ${d.name}. Am Ende wartet ${MOBS[d.boss].name}.`, 'g'); }
   else { const d = q.exit; p.dun = null; p.x = d.px * 0.86; p.z = d.pz * 0.86; p.y = terrainH(p.x, p.z); GFX.setMood(null); for (const m of mobs) if (m.state === 'chase') m.state = 'return'; }
   p.vy = 0; p.moveTo = null; p.attacking = false; setTarget(null); ring(p.x, p.y, p.z, 0x9ff0ff, 6); beep(520, 0.4, 'sine', 0.06, 400); zoneName = ''; hudT = 0; save();
 }
 function openNpc(n) {
   if (n.portal) return usePortal(n);
-  curNpc = n; shopOpen = n.id === 'tessa' || n.id === 'ivo'; $('#npcTitle').textContent = `${n.name} – ${n.role}`; let h = '';
-  if (n.id === 'mira') {
+  const K = n.kind || n.id; curNpc = n; shopOpen = K === 'tessa' || K === 'ivo'; $('#npcTitle').textContent = `${n.name} – ${n.role}`; let h = '';
+  if (K === 'mira') {
     const q = curQuest();
     if (!q) h = 'Du hast alles vollbracht, was ich mir je erträumt habe. Wolkenreich ist sicher – dank dir!';
     else if (!p.q.on) h = p.lvl < q.lvl ? `Ich habe bald wieder eine Aufgabe für dich. Komm zurück, wenn du <b>Stufe ${q.lvl}</b> erreicht hast.` : `<h4>${q.name}</h4>${q.text}<h4>Ziel</h4>${questGoal(q)}<h4>Belohnung</h4>${rewardText(q)}<div class="npcbtns"><button data-act="accept">Quest annehmen</button></div>`;
     else if (questDone()) h = `<h4>${q.name}</h4>Wunderbar! Du hast es geschafft. Hier ist deine Belohnung:<br><b>${rewardText(q)}</b><div class="npcbtns"><button data-act="finish">Quest abschließen</button></div>`;
     else h = `<h4>${q.name}</h4>${q.text}<h4>Fortschritt</h4>${questGoal(q)}: <b>${questProg()} / ${q.n}</b>`;
-  } else if (n.id === 'tessa') {
+  } else if (K === 'tessa') {
     const ids = Object.keys(ITEMS).filter(id => { const it = ITEMS[id]; return it.type === 'use' || (isGear(id) && !it.fr && !it.acc && !it.old && (!it.cls || it.cls === p.cls) && it.lvl <= p.lvl + 9 && it.lvl >= p.lvl - 16); });
     h = `Willkommen! Sieh dich um. <span class="muted">(Zum Verkaufen im Inventar auf einen Gegenstand klicken.)</span><div style="margin-top:8px">${shopHtml(ids)}</div>`;
-  } else if (n.id === 'ivo') {
+  } else if (K === 'ivo') {
     h = `Der Himmel ruft! Rüste ein Flugbrett aus und drücke <b>F</b>, um abzuheben. <b>Leertaste</b> steigt, <b>X</b> sinkt. Die Himmelsinseln liegen im Südosten.<div style="margin-top:8px">${shopHtml(['brett1', 'brett2'])}</div>`;
-  } else if (n.id === 'borin') {
+  } else if (K === 'borin') {
     h = `Ich verbessere Waffen, Rüstung und Accessoires bis <b>+10</b> – jede Stufe bringt <b>+8 %</b> auf die Werte. Ich brauche Sternsplitter 💎 (du hast <b>${countItem('splitter')}</b>) und Taler, ab <b>+4</b> zusätzlich Verbesserungsrollen 📜 (du hast <b>${countItem('rolle')}</b>). Beides findest du bei Monstern. Je höher die Stufe, desto öfter misslingt es – dann sind nur die Materialien weg.<div class="muted" style="margin:6px 0">Chancen: ${UPCHANCE.map((c, i) => `+${i + 1}: ${Math.round(c * 100)} %`).join(' · ')}</div>`;
     let any = false;
     for (const slot of WEAR) { const u = upgradeInfo(slot); if (!u) continue; any = true; const ok = p.gold >= u.cost && countItem('splitter') >= u.stones && countItem('rolle') >= u.scrolls; h += `<div class="shoprow"><span class="ic">${ITEMS[u.e.id].icon}</span><span class="nm">${gearName(u.e.id, u.e.r, u.pl)}${u.pl < 10 ? `<small>→ +${u.pl + 1} · Chance <b>${Math.round(u.chance * 100)} %</b> · ${u.stones} 💎${u.scrolls ? ' + ' + u.scrolls + ' 📜' : ''} + ${u.cost.toLocaleString('de-DE')} Taler</small>` : '<small>Maximal verbessert</small>'}</span>${u.pl < 10 ? `<button data-up="${slot}" ${ok ? '' : 'disabled'}>Verbessern</button>` : ''}</div>`; }
     if (!any) h += '<div class="muted">Du trägst nichts, das ich verbessern könnte.</div>';
-  } else if (n.id === 'kaela') {
+  } else if (K === 'kaela') {
     const reset = `<br><br>Für ${(p.lvl * 60).toLocaleString('de-DE')} Taler setze ich deine Attributpunkte zurück.<div class="npcbtns"><button data-act="reset" ${p.gold < p.lvl * 60 ? 'disabled' : ''}>Attribute zurücksetzen</button></div>`;
     if (p.cls === 'wanderer') {
       if (p.lvl < 10) h = `Du hast Talent, Wanderer. Komm zu mir, wenn du <b>Stufe 10</b> erreicht hast – dann wähle deine Berufung.`;
@@ -262,6 +278,7 @@ function openNpc(n) {
 }
 $('#npcBody').addEventListener('click', e => {
   const d = e.target.dataset; if (e.target.tagName !== 'BUTTON') return;
+  if (d.wp) { const pl = PLACES.find(q => q.id === d.wp); if (pl && p.wp.includes(pl.id)) travelTo(pl); return; }
   if (d.act === 'accept') { p.q.on = true; p.q.prog = 0; log(`Quest angenommen: ${curQuest().name}`, 'g'); beep(660, 0.12, 'triangle'); }
   else if (d.act === 'finish' && questDone()) {
     const q = curQuest(); if (p.inv.length + q.items.length > 36) return log('Dein Inventar ist zu voll für die Belohnung!', 'r');
@@ -296,8 +313,8 @@ const HELP = `<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> laufen · <b>Klic
 Monster mit <b style="color:#ff6a5a">rotem Namen</b> greifen von selbst an. <b>Klick auf Monster</b> wählt es aus, <b>zweiter Klick</b> oder <kbd>1</kbd> greift an · <kbd>Tab</kbd> nächstes Ziel<br>
 <kbd>2</kbd>–<kbd>8</kbd> Fertigkeiten · <kbd>9</kbd> Heiltrank · <kbd>0</kbd> Manatrank<br>
 <kbd>F</kbd> fliegen (Flugbrett nötig) – <kbd>Leertaste</kbd> steigen, <kbd>X</kbd> sinken<br>
-<kbd>C</kbd> Charakter · <kbd>I</kbd> Inventar · <kbd>L</kbd> Quests · <kbd>H</kbd> Hilfe · <kbd>Esc</kbd> schließen<br>
-<b>Klick auf Dorfbewohner</b> zum Reden. Die vier <b>Dungeon-Portale</b> stehen rund ums Dorf (hellblaue Punkte auf der Karte). Der Spielstand wird automatisch gespeichert.<br>
+<kbd>C</kbd> Charakter · <kbd>I</kbd> Inventar · <kbd>L</kbd> Quests · <kbd>M</kbd> Karte · <kbd>H</kbd> Hilfe · <kbd>Esc</kbd> schließen<br>
+<b>Klick auf Dorfbewohner</b> zum Reden. Die vier <b>Dungeon-Portale</b> stehen rund ums Dorf (hellblaue Punkte auf der Karte). <b>Wegsteine</b> in Dörfern und Stationen erlauben Schnellreisen zu besuchten Orten. Der Spielstand wird automatisch gespeichert.<br>
 <span class="gfxrow">Grafik: <button data-q="hoch">Hoch</button> <button data-q="mittel">Mittel</button> <button data-q="niedrig">Niedrig</button></span>`;
 document.querySelectorAll('.helpBody').forEach(e => e.innerHTML = HELP);
 const markQ = () => document.querySelectorAll('[data-q]').forEach(b => { b.style.outline = b.dataset.q === GFX.quality ? '2px solid #fff' : 'none'; });
@@ -480,7 +497,7 @@ const NPC_LOOK = {
 };
 function buildNpcs() {
   for (const n of NPCS) {
-    const h = GFX.human(Object.assign({ hair: n.hair, scale: 1.05 }, NPC_LOOK[n.id])); n.y = terrainH(n.x, n.z); n.rot = Math.atan2(-n.x, -n.z); h.g.position.set(n.x, n.y, n.z); h.g.rotation.y = n.rot; scene.add(h.g);
+    const h = GFX.human(Object.assign({ hair: n.hair, scale: 1.05 }, NPC_LOOK[n.kind || n.id])); n.y = terrainH(n.x, n.z); n.rot = n.face ? Math.atan2(n.face[0] - n.x, n.face[1] - n.z) : Math.atan2(-n.x, -n.z); h.g.position.set(n.x, n.y, n.z); h.g.rotation.y = n.rot; scene.add(h.g);
     n.pick = addPick(h.g, 1.6, 2.6, 3.8, n, 'npc'); n.h = h;
     const l = document.createElement('div'); l.className = 'lbl'; $('#labels').appendChild(l); n.lbl = l; npcs.push(n);
   }
@@ -583,8 +600,10 @@ function updateHud(dt) {
     $('#gold').textContent = `💰 ${p.gold.toLocaleString('de-DE')} Taler`;
     $('#buffs').innerHTML = p.buffs.map(b => `<span>${b.icon} ${Math.ceil(b.t)}s</span>`).join('') + (p.sp ? '<span style="color:#7dffb0">▲ Punkte frei (C)</span>' : '');
     let zn = 'Wildnis'; const d0 = Math.hypot(p.x, p.z), isl = islandAt(p.x, p.z);
-    if (p.dun) zn = p.dun.name; else if (isl && p.y > isl.y - 2) zn = isl.name || 'Himmelsinseln'; else if (d0 < 45) zn = 'Luminhafen'; else for (const z of ZONES) if (Math.hypot(p.x - z.x, p.z - z.z) < z.r * 1.1) zn = z.name;
-    if (zn !== zoneName) { zoneName = zn; const zz = ZONES.find(q => q.name === zn); zoneKey = p.dun ? p.dun.amb : zz ? zz.id : zn === 'Luminhafen' ? 'town' : isl ? 'isl' : ''; $('#zone').textContent = zn; if (zn !== 'Wildnis') { const z = ZONES.find(q => q.name === zn); center(zn, z ? `Monster ab Stufe ${MOBS[z.mobs[0][0]].lvl}` : p.dun ? `Dungeon · Stufe ${p.dun.lvl}–${p.dun.max}` : isl ? `Monster ab Stufe ${MOBS[isl.mobs[0][0]].lvl}` : 'Sicheres Dorf'); } }
+    const here = !p.dun && PLACES.find(pl => pl.id !== 'luminhafen' && Math.hypot(p.x - pl.x, p.z - pl.z) < pl.r + 6);
+    for (const pl of PLACES) if (!p.dun && !p.wp.includes(pl.id) && Math.hypot(p.x - pl.x, p.z - pl.z) < pl.r + 10) { p.wp.push(pl.id); log(`Wegstein entdeckt: ${pl.name}. Du kannst jetzt hierher reisen.`, 'g'); beep(784, 0.25, 'triangle', 0.05, 300); }
+    if (p.dun) zn = p.dun.name; else if (here && p.y < here.h + 12) zn = here.name; else if (isl && p.y > isl.y - 2) zn = isl.name || 'Himmelsinseln'; else if (d0 < 82) zn = 'Luminhafen'; else for (const z of ZONES) if (Math.hypot(p.x - z.x, p.z - z.z) < z.r * 1.1) zn = z.name;
+    if (zn !== zoneName) { zoneName = zn; const zz = ZONES.find(q => q.name === zn); zoneKey = p.dun ? p.dun.amb : zz ? zz.id : zn === 'Luminhafen' || PLACES.some(q => q.name === zn) ? 'town' : isl ? 'isl' : ''; $('#zone').textContent = zn; if (zn !== 'Wildnis') { const z = ZONES.find(q => q.name === zn); center(zn, z ? `Monster ab Stufe ${MOBS[z.mobs[0][0]].lvl}` : p.dun ? `Dungeon · Stufe ${p.dun.lvl}–${p.dun.max}` : PLACES.some(q => q.name === zn) ? (PLACES.find(q => q.name === zn).type === 'dorf' ? 'Sicheres Dorf' : 'Station') : isl ? `Monster ab Stufe ${MOBS[isl.mobs[0][0]].lvl}` : 'Sicheres Dorf'); } }
     for (const n of npcs) { const mk = npcMark(n), html = `${mk ? `<span class="qm">${mk}</span>` : ''}${n.name}<small>${n.role}</small>`; if (n._h !== html) { n._h = html; n.lbl.innerHTML = html; } }
   }
   if (p.dun) { const d = p.dun, alive = [0, 0, 0, 0, 0], pi = dunIdx(d, p.x, p.z); for (const m of mobs) if (m.home.dun === d && !m.dead) alive[m.home.ri]++; for (let i = 1; i < 4; i++) { d.locks[i] = alive[i] > 0 && pi <= i; d.gates[i].visible = alive[i] > 0; } }
@@ -593,7 +612,7 @@ function updateHud(dt) {
   for (let i = 0; i < mobLbl.length; i++) { const l = mobLbl[i], q = near[i], s = q ? toScreen(q[1].x, mobCenterY(q[1]) + 1.7 * q[1].def.scale, q[1].z) : null; if (!s) { if (l.on) { l.el.style.display = 'none'; l.on = false; } continue; } const m = q[1], tx = `${m.def.boss ? '👑 ' : ''}${m.def.name} · St. ${m.def.lvl}`; if (l.tx !== tx) { l.tx = tx; l.el.textContent = tx; l.el.style.color = m.def.aggro ? '#ff5a48' : '#fff3c4'; } if (!l.on) { l.el.style.display = ''; l.on = true; } l.el.style.left = s.x + 'px'; l.el.style.top = s.y + 'px'; }
   for (const n of portals) { const s = Math.hypot(n.x - p.x, n.z - p.z) < 110 ? toScreen(n.x, n.y + 7.6, n.z) : null; if (s) { n.lbl.style.display = ''; n.lbl.style.left = s.x + 'px'; n.lbl.style.top = s.y + 'px'; } else n.lbl.style.display = 'none'; }
   for (const n of npcs) { const s = Math.hypot(n.x - p.x, n.z - p.z) < 90 ? toScreen(n.x, n.y + 4.0, n.z) : null; if (s) { n.lbl.style.display = ''; n.lbl.style.left = s.x + 'px'; n.lbl.style.top = s.y + 'px'; } else n.lbl.style.display = 'none'; }
-  mapT -= dt; if (mapT <= 0) { mapT = 0.12; drawMap(); }
+  mapT -= dt; if (mapT <= 0) { mapT = 0.12; drawMap(); if (!$('#winMap').classList.contains('hidden')) drawBigMap(); }
 }
 const mctx = $('#minimap').getContext('2d');
 function drawMap() {
@@ -603,7 +622,7 @@ function drawMap() {
   const circ = (x, z, r, col) => { const q = P(x, z); c.fillStyle = col; c.beginPath(); c.arc(q[0], q[1], r * k, 0, 7); c.fill(); };
   if (p.dun) { const d = p.dun; c.strokeStyle = '#5a6078'; c.lineWidth = d.w * k; c.beginPath(); d.rooms.forEach((r, i) => { const q = P(r.x, r.z); i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]); }); c.stroke(); for (const r of d.rooms) circ(r.x, r.z, r.r, '#5a6078'); }
   else for (const z of ZONES) circ(z.x, z.z, z.r, `rgba(${z.col.map(v => Math.round(v * 255)).join(',')},.75)`);
-  if (!p.dun) { circ(0, 0, 34, 'rgba(230,205,150,.9)'); for (const i of ISLANDS) circ(i.x, i.z, i.r, 'rgba(200,235,255,.75)'); }
+  if (!p.dun) { circ(0, 0, 34, 'rgba(230,205,150,.9)'); for (const pl of PLACES) if (pl.id !== 'luminhafen') circ(pl.x, pl.z, pl.type === 'dorf' ? 16 : 8, 'rgba(230,205,150,.9)'); for (const i of ISLANDS) circ(i.x, i.z, i.r, 'rgba(200,235,255,.75)'); }
   for (const n of portals) { const q = P(n.x, n.z); c.fillStyle = '#7ff0ff'; c.beginPath(); c.arc(q[0], q[1], 3.5, 0, 7); c.fill(); }
   for (const m of mobs) { if (m.dead) continue; const q = P(m.x, m.z); if (Math.abs(q[0] - 80) > 82 || Math.abs(q[1] - 80) > 82) continue; c.fillStyle = m === p.target ? '#fff' : m.def.boss ? '#ff3ad6' : m.def.aggro ? '#ff4a4a' : '#ffb04a'; c.fillRect(q[0] - 1.5, q[1] - 1.5, m.def.boss ? 6 : 3, m.def.boss ? 6 : 3); }
   for (const n of npcs) { const q = P(n.x, n.z); c.fillStyle = '#ffe04a'; c.beginPath(); c.arc(q[0], q[1], 3, 0, 7); c.fill(); }
@@ -611,6 +630,37 @@ function drawMap() {
   const d0 = Math.hypot(p.x, p.z); if (d0 > R && !p.dun) { const a = Math.atan2(-p.z, -p.x); c.fillStyle = '#ffe04a'; c.beginPath(); c.arc(80 + Math.cos(a) * 72, 80 + Math.sin(a) * 72, 4, 0, 7); c.fill(); }
   c.translate(80, 80); c.rotate(-p.rot + Math.PI); c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.beginPath(); c.moveTo(0, -7); c.lineTo(5, 6); c.lineTo(0, 3); c.lineTo(-5, 6); c.closePath(); c.fill(); c.stroke(); c.restore();
   c.fillStyle = '#fff'; c.font = 'bold 10px sans-serif'; c.fillText('N', 76, 11);
+}
+
+/* ---------- Große Karte (M) ---------- */
+let mapBg = null; const bctx = $('#bigmap').getContext('2d');
+function buildMapBg() {
+  const N = 300, c = document.createElement('canvas'); c.width = c.height = N; const x = c.getContext('2d'), id = x.createImageData(N, N), o = [0, 0, 0, 0, 0];
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const wx = (i / N - 0.5) * 920, wz = (j / N - 0.5) * 920, h = terrainH(wx, wz), k = (j * N + i) * 4; let r, g, b;
+    if (h < WATER) { const t = clamp((WATER - h) / 14, 0, 1); r = 70 - t * 40; g = 150 - t * 60; b = 205 - t * 50; } else { GFX.landColor(wx, wz, h, o); const sh = 1.1 + (terrainH(wx - 3, wz - 3) - h) * 0.06; r = o[0] * 255 * sh; g = o[1] * 255 * sh; b = o[2] * 255 * sh; }
+    id.data[k] = r; id.data[k + 1] = g; id.data[k + 2] = b; id.data[k + 3] = 255; }
+  x.putImageData(id, 0, 0); return c;
+}
+function questArea() { const q = curQuest(); if (!q || !p.q.on) return null; const mob = q.kill || Object.keys(MOBS).find(k => MOBS[k].drop === q.collect); for (const z of ZONES) if (z.mobs.some(m => m[0] === mob)) return z; for (const i of ISLANDS) if (i.mobs.some(m => m[0] === mob)) return i; return null; }
+function drawBigMap() {
+  const c = bctx, S = 600, sc = S / 920, M = (x, z) => [(x + 460) * sc, (z + 460) * sc]; c.clearRect(0, 0, S, S); c.textAlign = 'center';
+  const label = (t, x, y, col = '#fff', f = 'bold 12px sans-serif') => { c.font = f; c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,.85)'; c.strokeText(t, x, y); c.fillStyle = col; c.fillText(t, x, y); };
+  if (p.dun) { const d = p.dun; c.fillStyle = '#10121c'; c.fillRect(0, 0, S, S); const k = 2, D = (x, z) => [300 + (x - d.rooms[2].x / 2 - d.rooms[0].x / 2) * k, 40 + (z - d.rooms[0].z + 14) * k];
+    c.strokeStyle = '#4a5068'; c.lineWidth = d.w * k; c.beginPath(); d.rooms.forEach((r, i) => { const q = D(r.x, r.z); i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]); }); c.stroke();
+    d.rooms.forEach((r, i) => { const q = D(r.x, r.z); c.fillStyle = i === 4 ? '#6a3a4a' : '#4a5068'; c.beginPath(); c.arc(q[0], q[1], r.r * k, 0, 7); c.fill(); label(i === 0 ? 'Eingang' : i === 4 ? '👑 ' + MOBS[d.boss].name : `Raum ${i}: ${MOBS[d.mobs[i - 1]].name}`, q[0], q[1] - r.r * k - 6, i === 4 ? '#ff9a9a' : '#fff'); });
+    for (const m of mobs) if (m.home.dun === d && !m.dead) { const q = D(m.x, m.z); c.fillStyle = m.def.boss ? '#ff3ad6' : '#ff4a4a'; c.fillRect(q[0] - 2, q[1] - 2, m.def.boss ? 8 : 4, m.def.boss ? 8 : 4); }
+    const q = D(p.x, p.z); c.save(); c.translate(q[0], q[1]); c.rotate(-p.rot + Math.PI); c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.beginPath(); c.moveTo(0, -10); c.lineTo(7, 8); c.lineTo(0, 4); c.lineTo(-7, 8); c.closePath(); c.fill(); c.stroke(); c.restore();
+    label(`${d.name} · Dungeon Stufe ${d.lvl}–${d.max}`, 300, 585, '#ffd978', 'bold 15px sans-serif'); return; }
+  mapBg = mapBg || buildMapBg(); c.imageSmoothingEnabled = true; c.drawImage(mapBg, 0, 0, S, S);
+  const qa = questArea(), pulse = 0.5 + Math.sin(time * 4) * 0.5;
+  for (const z of ZONES) { const q = M(z.x, z.z), lv = z.mobs.map(m => MOBS[m[0]].lvl); c.setLineDash([5, 5]); c.strokeStyle = 'rgba(255,255,255,.45)'; c.lineWidth = 1.5; c.beginPath(); c.arc(q[0], q[1], z.r * sc, 0, 7); c.stroke(); c.setLineDash([]); label(z.name, q[0], q[1] - 3, '#fff', 'bold 13px sans-serif'); label(`Stufe ${Math.min(...lv)}–${Math.max(...lv)}`, q[0], q[1] + 12, lv[0] > p.lvl + 5 ? '#ff9a9a' : '#ffe9a8', '11px sans-serif'); }
+  for (const i of ISLANDS) { const q = M(i.x, i.z), lv = i.mobs.map(m => MOBS[m[0]].lvl); c.fillStyle = 'rgba(225,242,255,.7)'; c.strokeStyle = '#fff'; c.lineWidth = 1.5; c.beginPath(); c.arc(q[0], q[1], i.r * sc, 0, 7); c.fill(); c.stroke(); label(`☁ ${i.name || 'Himmelsinsel'} · St. ${Math.min(...lv)}${lv.length > 1 ? '–' + Math.max(...lv) : ''}`, q[0], q[1] - i.r * sc - 5, '#cfe6ff', 'bold 11px sans-serif'); }
+  if (qa) { const q = M(qa.x, qa.z); c.strokeStyle = `rgba(255,224,74,${0.5 + pulse * 0.5})`; c.lineWidth = 3; c.beginPath(); c.arc(q[0], q[1], qa.r * sc + 4 + pulse * 4, 0, 7); c.stroke(); label('❗ Questziel', q[0], q[1] + qa.r * sc + 16, '#ffe04a'); }
+  for (const n of portals) if (n.enter) { const q = M(n.x, n.z); c.fillStyle = '#7ff0ff'; c.strokeStyle = '#000'; c.lineWidth = 1; c.beginPath(); c.arc(q[0], q[1], 4, 0, 7); c.fill(); c.stroke(); }
+  for (const pl of PLACES) { const q = M(pl.x, pl.z), known = p.wp.includes(pl.id); c.font = pl.type === 'dorf' ? '20px sans-serif' : '15px sans-serif'; c.globalAlpha = known ? 1 : 0.55; c.fillText(pl.type === 'dorf' ? '🏠' : '⛺', q[0], q[1] + 6); c.globalAlpha = 1; label(known ? pl.name : '? ' + pl.name, q[0], q[1] + (pl.type === 'dorf' ? 22 : 19), known ? '#fff' : '#c8c8c8', pl.type === 'dorf' ? 'bold 12px sans-serif' : '11px sans-serif'); }
+  const q = M(clamp(p.x, -455, 455), clamp(p.z, -455, 455)); c.strokeStyle = `rgba(255,255,255,${1 - pulse * 0.6})`; c.lineWidth = 2; c.beginPath(); c.arc(q[0], q[1], 9 + pulse * 6, 0, 7); c.stroke();
+  c.save(); c.translate(q[0], q[1]); c.rotate(-p.rot + Math.PI); c.fillStyle = '#ff3a3a'; c.strokeStyle = '#fff'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(0, -10); c.lineTo(7, 8); c.lineTo(0, 4); c.lineTo(-7, 8); c.closePath(); c.fill(); c.stroke(); c.restore();
+  label('N', 300, 16, '#fff', 'bold 14px sans-serif'); c.textAlign = 'left';
 }
 
 /* ---------- Eingabe ---------- */
@@ -639,7 +689,7 @@ window.addEventListener('keydown', e => {
   if (e.repeat) { if (k === ' ' || k === 'tab') e.preventDefault(); return; }
   if (k >= '0' && k <= '9') { const s = slots.find(q => q.key === k); if (s) s.act(); }
   else if (k === 'tab') { e.preventDefault(); setTarget(nearestMob(45, p.target) || p.target); }
-  else if (k === 'f') toggleFly(); else if (k === 'c') toggleWin('winChar'); else if (k === 'i' || k === 'b') toggleWin('winInv'); else if (k === 'l' || k === 'q') toggleWin('winQuest'); else if (k === 'h') toggleWin('winHelp');
+  else if (k === 'f') toggleFly(); else if (k === 'c') toggleWin('winChar'); else if (k === 'i' || k === 'b') toggleWin('winInv'); else if (k === 'l' || k === 'q') toggleWin('winQuest'); else if (k === 'h') toggleWin('winHelp'); else if (k === 'm') toggleWin('winMap');
   else if (k === 'escape') { const open = [...document.querySelectorAll('.win')].filter(w => !w.classList.contains('hidden')); if (open.length) open.forEach(w => showWin(w.id, false)); else setTarget(null); }
   else if (k === ' ') e.preventDefault();
 });
@@ -649,14 +699,14 @@ window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; }
 /* ---------- Speichern ---------- */
 function save() {
   if (!started) return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ name: p.name, hair: p.hair, cls: p.cls, spec: p.spec, lvl: p.lvl, exp: p.exp, gold: p.gold, sp: p.sp, stats: p.stats, inv: p.inv, equip: p.equip, q: p.q, hp: p.hp, mp: p.mp, x: p.x, y: p.y, z: p.z })); } catch (e) { /* Speicher nicht verfügbar */ }
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ name: p.name, hair: p.hair, cls: p.cls, spec: p.spec, wp: p.wp, lvl: p.lvl, exp: p.exp, gold: p.gold, sp: p.sp, stats: p.stats, inv: p.inv, equip: p.equip, q: p.q, hp: p.hp, mp: p.mp, x: p.x, y: p.y, z: p.z })); } catch (e) { /* Speicher nicht verfügbar */ }
 }
 function loadSave() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s && s.name && CLASSES[s.cls] ? s : null; } catch (e) { return null; } }
 setInterval(save, 15000); window.addEventListener('beforeunload', save);
 
 /* ---------- Start ---------- */
 function startGame(s) {
-  if (s) { Object.assign(p, s); p.dun = null; if (p.x > 2000) { p.x = 0; p.z = 16; } p.inv = (s.inv || []).filter(i => ITEMS[i.id]); for (const k in p.equip) if (p.equip[k] && !ITEMS[p.equip[k].id]) p.equip[k] = null; if (p.flying || islandAt(p.x, p.z)) p.y = Math.max(p.y, groundAt(p.x, p.z, p.y)); else p.y = terrainH(p.x, p.z); }
+  if (s) { Object.assign(p, s); p.dun = null; p.wp = Array.isArray(s.wp) ? s.wp : ['luminhafen']; if (p.x > 2000) { p.x = 0; p.z = 16; } p.inv = (s.inv || []).filter(i => ITEMS[i.id]); for (const k in p.equip) if (p.equip[k] && !ITEMS[p.equip[k].id]) p.equip[k] = null; if (p.flying || islandAt(p.x, p.z)) p.y = Math.max(p.y, groundAt(p.x, p.z, p.y)); else p.y = terrainH(p.x, p.z); }
   else { p.name = ($('#nameInput').value.trim() || 'Wanderer').slice(0, 14); p.equip.weapon = { id: 'w_holz', plus: 0 }; p.equip.armor = { id: 'a_0', plus: 0 }; p.inv = [{ id: 'apfel', n: 5 }]; p.hp = maxHP(); p.mp = maxMP(); p.y = terrainH(p.x, p.z); }
   p.flying = false; refreshModel(); buildHotbar(); started = true; cam.yaw = 0;
   $('#start').classList.add('hidden'); $('#hud').classList.remove('hidden');

@@ -232,6 +232,19 @@ const WR = (() => {
     { id: 'spalt',  name: 'Leerenspalt',  lvl: 80, max: 100, col: 0x5a4a8a, wall: 0x3a2a5a, glow: 0xb060ff, amb: 'ruinen', mobs: ['d4a', 'd4b', 'd4c'], boss: 'd4boss', mood: { top: 0x040208, mid: 0x1c0c3a, hor: 0x4a2a7a, fog: 0x1c1030, sun: 0.9, hemi: 0.5, water: 0x1a0c3a } },
   ];
 
+  // Orte: Dörfer (Händler, Schmied, Wegstein) und kleine Stationen (Händler, Wegstein). Wegsteine erlauben Schnellreisen.
+  const PLACES = [
+    { id: 'luminhafen', name: 'Luminhafen',  type: 'dorf',    x: 0,    z: 0,    r: 80 },
+    { id: 'birkenau',   name: 'Birkenau',    type: 'dorf',    x: -124, z: 154,  r: 30, npcs: [['tessa', 'Händlerin Runa', 0xd6a53a], ['borin', 'Schmied Tjark', 0x6a3a22]] },
+    { id: 'aschenfurt', name: 'Aschenfurt',  type: 'dorf',    x: 80,   z: -122, r: 30, npcs: [['tessa', 'Händler Oswin', 0x3a3a3a], ['borin', 'Schmiedin Hedda', 0xd6453c]] },
+    { id: 'pilzrast',   name: 'Pilzrast',    type: 'station', x: 112,  z: 92,   r: 13, npcs: [['tessa', 'Sammlerin Ilve', 0x8e5bd0]] },
+    { id: 'glutwacht',  name: 'Glutwacht',   type: 'station', x: 152,  z: -108, r: 13, npcs: [['tessa', 'Wachposten Bran', 0x8a4b20]] },
+    { id: 'moorsteg',   name: 'Moorsteg',    type: 'station', x: -20,  z: 208,  r: 13, npcs: [['tessa', 'Fischerin Malin', 0xf2d16b]] },
+    { id: 'oedniswacht',name: 'Ödniswacht',  type: 'station', x: -250, z: -28,  r: 13, npcs: [['tessa', 'Späher Corvin', 0xeeeeee]] },
+    { id: 'schlundlager',name: 'Schlundlager', type: 'station', x: -142, z: -294, r: 13, npcs: [['tessa', 'Köhlerin Asa', 0x2a2a2a]] },
+    { id: 'ostkap',     name: 'Ostkap',      type: 'station', x: 292,  z: -76,  r: 13, npcs: [['tessa', 'Flugwart Enno', 0x3c6ad6]] },
+  ];
+
   const NPCS = [
     { id: 'mira',  name: 'Älteste Mira',   role: 'Quests',        x: 6,   z: 10,  color: 0xb46ad6, hair: 0xeeeeee },
     { id: 'tessa', name: 'Händlerin Tessa', role: 'Laden',        x: -12, z: 6,   color: 0xe08a3a, hair: 0x8a4b20 },
@@ -277,5 +290,5 @@ const WR = (() => {
   const MAXLVL = 100;
   const expNeed = l => Math.floor(40 * Math.pow(l, 1.9));
 
-  return { CLASSES, SPECS, SKILLS, RAR, SETS, SETF, UPCHANCE, DUNGEONS, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed };
+  return { CLASSES, SPECS, SKILLS, RAR, SETS, SETF, UPCHANCE, DUNGEONS, PLACES, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed };
 })();
