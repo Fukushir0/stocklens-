@@ -13,10 +13,12 @@ Nach Änderungen am Code: `node build.js` erzeugt die Standalone-Datei neu.
 
 ## Inhalt
 
-- Offene Welt mit Dorf Luminhafen, 5 Zonen und 3 Himmelsinseln, 12 Monsterarten inkl. Boss
+- Offene Welt mit Dorf Luminhafen, 9 Gebieten und 6 Himmelsinseln, 26 Monsterarten inkl. zwei Bossen
+- Stufen bis 100, Attribute (STR/STA/DEX/INT), 26 aufeinander aufbauende Quests
 - 4 Klassen ab Stufe 10 (Klingenkämpfer, Arkanist, Waldläufer, Kleriker) mit je 3 Fertigkeiten
-- Attribute (STR/STA/DEX/INT), Stufen bis 40, 12 aufeinander aufbauende Quests
-- Inventar, Händler, Beute, Ausrüstungsverbesserung bis +10 beim Schmied
+- Zweite Klassenstufe ab Stufe 60: zwei Wege je Klasse (z. B. Sturmritter oder Berserker) mit je 3 weiteren Fertigkeiten
+- Inventar, Taler als Währung, Händler, Beute und Ausrüstungsverbesserung bis +10 beim Schmied
+- Seltenheitsgrade für Waffen und Rüstungen: Bronze, Silber, Gold, Platin, Diamant (bis +80 % Werte)
 - Fliegen mit Flugbrett, Minimap, automatisches Speichern (localStorage)
 
 ## Grafik
@@ -49,9 +51,9 @@ Bildrate schaltet das Spiel selbst herunter.
 | Maus ziehen / Mausrad | Kamera drehen / zoomen |
 | Klick auf Monster, 2. Klick oder `1` | auswählen / angreifen |
 | `Tab` | nächstes Ziel |
-| `2`–`5` | Fertigkeiten |
-| `6` / `7` | Heil- / Manatrank |
-| `F` oder `8` | fliegen (Leertaste steigen, `X` sinken) |
+| `2`–`8` | Fertigkeiten |
+| `9` / `0` | Heil- / Manatrank |
+| `F` | fliegen (Leertaste steigen, `X` sinken) |
 | `C` `I` `L` `H` | Charakter, Inventar, Quests, Hilfe |
 
 Grafik: [three.js](https://threejs.org) r160 (MIT, siehe `three.LICENSE`). Alle Modelle werden

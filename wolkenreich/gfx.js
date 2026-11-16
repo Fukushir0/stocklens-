@@ -249,7 +249,11 @@ function buildWorld() {
   for (let n = 0; n < 4400; n++) {
     const x = sr(-440, 440), z = sr(-440, 440), d = Math.hypot(x, z), h = terrainH(x, z); if (d < 44 || d > 425 || h < -1.4) continue;
     landColor(x, z, h, cc); if (cc[3] > 0.25) continue; const zn = zoneAt(x, z, 1.1), q = sr();
-    if (zn === 'fels') { if (q < 0.72) add(q < 0.3 ? 'rock' : 'rock2', x, z, sr(1.2, 4.5), tint(0.8, 1.05)); else if (q < 0.8) add('pine', x, z, sr(0.8, 1.2), tint(0.8, 1)); else if (q < 0.88) add('bush', x, z, sr(0.8, 1.4), tint(0.7, 0.9)); }
+    if (zn === 'frost') { if (q < 0.45) add('pine', x, z, sr(0.8, 1.5), 0xdfeaf2); else if (q < 0.7) add(q < 0.58 ? 'rock' : 'rock2', x, z, sr(1, 3.6), 0xe6eef6); else if (q < 0.8) add('icecrystal', x, z, sr(0.8, 1.8)); }
+    else if (zn === 'moor') { if (q < 0.3) add('dark', x, z, sr(0.7, 1.2), tint(0.7, 0.9)); else if (q < 0.5) add('shroomP', x, z, sr(0.4, 1.3)); else if (q < 0.7) add('bush', x, z, sr(0.8, 1.6), tint(0.6, 0.8)); else if (q < 0.8) add('dead', x, z, sr(0.7, 1.1)); }
+    else if (zn === 'ruinen') { if (q < 0.4) add('pillar', x, z, sr(0.8, 1.5)); else if (q < 0.65) add('rock2', x, z, sr(1, 3), tint(0.8, 1)); else if (q < 0.75) add('dead', x, z, sr(0.8, 1.2)); }
+    else if (zn === 'vulkan') { if (q < 0.35) add('rock2', x, z, sr(1.5, 5), 0x3a2a28); else if (q < 0.65) add('crystal', x, z, sr(1, 2.4)); else if (q < 0.8) add('dead', x, z, sr(0.9, 1.5)); }
+    else if (zn === 'fels') { if (q < 0.72) add(q < 0.3 ? 'rock' : 'rock2', x, z, sr(1.2, 4.5), tint(0.8, 1.05)); else if (q < 0.8) add('pine', x, z, sr(0.8, 1.2), tint(0.8, 1)); else if (q < 0.88) add('bush', x, z, sr(0.8, 1.4), tint(0.7, 0.9)); }
     else if (zn === 'glut') { if (q < 0.3) add('rock2', x, z, sr(1.2, 4), 0x4a3a36); else if (q < 0.55) add('crystal', x, z, sr(0.8, 1.9)); else if (q < 0.75) add('dead', x, z, sr(0.8, 1.4)); }
     else if (zn === 'hain') { if (q < 0.4) add('shroomR', x, z, sr(0.7, 2.2)); else if (q < 0.7) add('shroomP', x, z, sr(0.6, 2.4)); else if (q < 0.85) add('oak', x, z, sr(0.8, 1.2), tint(0.75, 0.95)); else add('bush', x, z, sr(0.8, 1.5), tint(0.8, 1)); }
     else if (zn === 'wald') { add('dark', x, z, sr(0.9, 1.6), tint(0.8, 1.05)); if (q < 0.7) add(q < 0.35 ? 'dark' : 'pine', x + sr(-10, 10), z + sr(-10, 10), sr(0.9, 1.5), tint(0.6, 0.8)); if (q > 0.8) add('shroomP', x + sr(-5, 5), z + sr(-5, 5), sr(0.3, 0.7)); }
@@ -268,7 +272,7 @@ function buildWorld() {
   const fMat = windify(new T.MeshStandardMaterial({ map: TX.flower, alphaTest: 0.4, roughness: 1 }), 0.25, 0);
   const CS = 80; for (let cx = -440; cx < 440; cx += CS) for (let cz = -440; cz < 440; cz += CS) {
     const G = [], F = [];
-    for (let n = 0; n < 2100; n++) { const x = cx + sr(0, CS), z = cz + sr(0, CS), h = terrainH(x, z); if (h < -1.2 || Math.hypot(x, z) < 25) continue; landColor(x, z, h, cc); if (cc[3] > 0.35 || cc[4] > 0.4) continue; const zn = zoneAt(x, z, 1.0); if ((zn === 'fels' && sr() < 0.8) || (zn === 'glut' && sr() < 0.93)) continue; if (n < 90 && (zn === 'wiese' || zn === '' || zn === 'hain')) F.push([x, h, z, sr(0.9, 1.5)]); else G.push([x, h, z, sr(1.5, 2.6), sr(0.4, 0.85), cc[0], cc[1], cc[2]]); }
+    for (let n = 0; n < 2100; n++) { const x = cx + sr(0, CS), z = cz + sr(0, CS), h = terrainH(x, z); if (h < -1.2 || Math.hypot(x, z) < 25) continue; landColor(x, z, h, cc); if (cc[3] > 0.35 || cc[4] > 0.4) continue; const zn = zoneAt(x, z, 1.0); if ((zn === 'fels' && sr() < 0.8) || ((zn === 'glut' || zn === 'vulkan') && sr() < 0.93) || (zn === 'ruinen' && sr() < 0.7)) continue; if (n < 90 && (zn === 'wiese' || zn === '' || zn === 'hain' || zn === 'moor')) F.push([x, h, z, sr(0.9, 1.5)]); else G.push([x, h, z, sr(1.5, 2.6), sr(0.4, 0.85), cc[0], cc[1], cc[2]]); }
     for (const i of ISLANDS) if (i.x > cx - i.r && i.x < cx + CS + i.r && i.z > cz - i.r && i.z < cz + CS + i.r) for (let n = 0; n < 900; n++) { const x = cx + sr(0, CS), z = cz + sr(0, CS); if (Math.hypot(x - i.x, z - i.z) < i.r - 1.5) (n % 12 ? G : F).push([x, i.y, z, sr(1.1, 1.9), sr(0.45, 1.0), 0.34, 0.6, 0.24]); }
     const mk = (arr, mat, isG) => { if (!arr.length) return; const im = new T.InstancedMesh(tuft, mat, arr.length); arr.forEach((o, i) => { dm.position.set(o[0], o[1] - 0.05, o[2]); dm.rotation.set(0, sr(0, 3.14), 0); isG ? dm.scale.set(o[3], o[4], o[3]) : dm.scale.setScalar(o[3]); dm.updateMatrix(); im.setMatrixAt(i, dm.matrix); if (isG) { col.setRGB(o[5], o[6], o[7], T.SRGBColorSpace); const b = sr(1.35, 1.75); im.setColorAt(i, col.multiplyScalar(b)); } }); im.receiveShadow = true; im.userData.c = [cx + CS / 2, cz + CS / 2]; scene.add(im); grassCells.push(im); };
     mk(G, gMat, true); mk(F, fMat, false);
@@ -300,6 +304,9 @@ function vegetationTypes() {
   TY.shroomR = shroom(0xb8302a, 0xf0705a, 0xfff4e0, 0xffc890); TY.shroomP = shroom(0x5a2f9a, 0xb57af0, 0xbfffe8, 0x7dffd0);
   const cr = [pc('rock2', 0x2e2422, [0, 0.2, 0], [2.2, 0.9, 2.2], null, 'stone')]; for (let i = 0; i < 5; i++) { const a = i * 1.3, r = i ? 0.7 : 0, s = i ? sr(0.5, 0.9) : 1.2; cr.push(pc('cone4', 0xffa040, [Math.cos(a) * r, 1.4 * s, Math.sin(a) * r], [0.7 * s, 3.2 * s, 0.7 * s], [Math.sin(a) * 0.35 * (i ? 1 : 0), a, -Math.cos(a) * 0.35 * (i ? 1 : 0)], 'glow', { top: 0xfff0a0 })); }
   TY.crystal = parts(cr);
+  const ic = [pc('rock', 0xe6eef6, [0, 0.2, 0], [2, 0.8, 2], null, 'stone')]; for (let i = 0; i < 5; i++) { const a = i * 1.3, r = i ? 0.7 : 0, s = i ? 0.7 : 1.2; ic.push(pc('cone4', 0x9fe0ff, [Math.cos(a) * r, 1.4 * s, Math.sin(a) * r], [0.7 * s, 3.2 * s, 0.7 * s], [Math.sin(a) * 0.35 * (i ? 1 : 0), a, -Math.cos(a) * 0.35 * (i ? 1 : 0)], 'gloss', { top: 0xffffff })); }
+  TY.icecrystal = parts(ic);
+  TY.pillar = parts([pc('cyl', 0xb0aab8, [0, 0.3, 0], [2.2, 0.6, 2.2], null, 'stone'), pc('cyl', 0xc4bece, [0, 2.6, 0], [1.3, 4.2, 1.3], [0.06, 0, 0.04], 'stone', { g: 0.3 }), pc('rock', 0xb0aab8, [0.2, 4.9, 0], [1.6, 0.7, 1.6], null, 'stone'), pc('box', 0x9f7aff, [0, 2.6, 0.67], [0.14, 1.6, 0.06], null, 'glow'), pc('box', 0x9f7aff, [0, 3.0, 0.67], [0.6, 0.14, 0.06], null, 'glow'), pc('rock2', 0xa49eac, [1.6, 0.4, 0.8], [1.3, 0.8, 1.1], null, 'stone')]);
   return TY;
 }
 
@@ -400,10 +407,10 @@ function projectile(kind, color) {
   else { build(g, [pc('sph', 0xffffff, null, 0.42, null, 'glow'), pc('sph', color, null, 0.8, null, 'add')]); g.add(glow(color, 4.2, 0.9)); }
   scene.add(g); return g;
 }
-function loot(gold) {
+function loot(gold, rc) {
   const g = new T.Group();
   if (gold) { build(g, [pc('cyl', 0xffd23c, null, [0.75, 0.13, 0.75], [PI / 2, 0, 0], 'metal'), pc('cyl', 0xfff0a0, null, [0.5, 0.15, 0.5], [PI / 2, 0, 0], 'metal')]); g.add(glow(0xffd23c, 1.8, 0.5)); }
-  else { build(g, [pc('box', 0x7a4fb8, [0, 0, 0], [0.7, 0.5, 0.5], null, 'matte', { g: 0.3 }), pc('cyl', 0x8a5fc8, [0, 0.25, 0], [0.5, 0.7, 0.5], [0, 0, PI / 2], 'matte'), pc('box', 0xd9b765, [0, 0.1, 0], [0.16, 0.78, 0.54], null, 'metal'), pc('box', 0xffe07a, [0, 0.12, 0.27], [0.2, 0.2, 0.06], null, 'glow')]); const b = new T.Mesh(new T.CylinderGeometry(0.16, 0.16, 7, 8, 1, true), new T.MeshBasicMaterial({ color: 0xc89cff, transparent: true, opacity: 0.4, blending: T.AdditiveBlending, depthWrite: false, toneMapped: false, side: T.DoubleSide })); b.position.y = 3.5; g.add(b); g.add(glow(0xc89cff, 2.4, 0.6)); }
+  else { build(g, [pc('box', 0x7a4fb8, [0, 0, 0], [0.7, 0.5, 0.5], null, 'matte', { g: 0.3 }), pc('cyl', 0x8a5fc8, [0, 0.25, 0], [0.5, 0.7, 0.5], [0, 0, PI / 2], 'matte'), pc('box', 0xd9b765, [0, 0.1, 0], [0.16, 0.78, 0.54], null, 'metal'), pc('box', 0xffe07a, [0, 0.12, 0.27], [0.2, 0.2, 0.06], null, 'glow')]); const b = new T.Mesh(new T.CylinderGeometry(0.16, 0.16, 7, 8, 1, true), new T.MeshBasicMaterial({ color: rc || 0xc89cff, transparent: true, opacity: rc ? 0.7 : 0.4, blending: T.AdditiveBlending, depthWrite: false, toneMapped: false, side: T.DoubleSide })); b.position.y = 3.5; if (rc) b.scale.set(1.8, 1.6, 1.8); g.add(b); g.add(glow(rc || 0xc89cff, rc ? 3.6 : 2.4, 0.6)); }
   scene.add(g); return g;
 }
 let selRing;
@@ -422,8 +429,10 @@ function frame(dt, time, f, zone) {
   // Umgebungs-Partikel je nach Gebiet
   ambT += dt; while (ambT > 0.05) { ambT -= 0.05; const x = f.x + rnd(-32, 32), z = f.z + rnd(-32, 32), y = f.y + rnd(-1, 9);
     if (zone === 'wald') pAdd.emit({ x, y, z, life: 4, size: 0.42, c: 0xd8ff7a, c2: 0x7dffb0, wob: 1.6, vs: 0.2 });
-    else if (zone === 'hain') pAdd.emit({ x, y, z, life: 4, size: 0.4, c: 0xc89cff, c2: 0x7dffd0, vy: 0.5, wob: 0.8 });
-    else if (zone === 'glut') pAdd.emit({ x, y: f.y + rnd(-2, 2), z, life: 3, size: 0.4, c: 0xffa040, c2: 0xff3010, vy: 2.6, wob: 1.2 });
+    else if (zone === 'frost') { pNorm.emit({ x, y: y + 6, z, life: 5, size: 0.4, c: 0xffffff, vy: -2.2, vx: 0.8, wob: 1 }); pNorm.emit({ x: f.x + rnd(-32, 32), y: y + 6, z: f.z + rnd(-32, 32), life: 5, size: 0.3, c: 0xffffff, vy: -2.6, vx: 0.8, wob: 1 }); }
+    else if (zone === 'ruinen') pAdd.emit({ x, y, z, life: 4, size: 0.35, c: 0x9f7aff, vy: 0.4, wob: 0.8 });
+    else if (zone === 'hain' || zone === 'moor') pAdd.emit({ x, y, z, life: 4, size: 0.4, c: 0xc89cff, c2: 0x7dffd0, vy: 0.5, wob: 0.8 });
+    else if (zone === 'glut' || zone === 'vulkan') pAdd.emit({ x, y: f.y + rnd(-2, 2), z, life: 3, size: 0.4, c: 0xffa040, c2: 0xff3010, vy: 2.6, wob: 1.2 });
     else if (zone === 'isl') pAdd.emit({ x, y, z, life: 3, size: 0.45, c: 0xbfeaff, vy: 0.6, wob: 0.6 });
     else if (zone === 'town' || zone === 'wiese') pNorm.emit({ x, y: y + 5, z, life: 5, size: 0.55, c: 0xffc8dc, c2: 0xffffff, vy: -1.1, vx: 0.9, wob: 1.4 });
     else if (Math.random() < 0.4) pNorm.emit({ x, y, z, life: 4, size: 0.3, c: 0xffffff, vy: 0.2, vx: 0.5, wob: 1 });

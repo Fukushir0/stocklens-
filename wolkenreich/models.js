@@ -161,7 +161,7 @@ GFX.human = function (o) {
   let wpn = null, wtype = null, extra = [];
   const H = {
     g, armed: false, robe: !!L.robe,
-    setWeapon(w) { for (const e of extra) e.parent.remove(e); extra = []; wpn = null; wtype = w ? w.wt : null; H.armed = !!w; if (!w) return; const d = weaponPieces(w), hand = d.left ? handL : handR, b = bone(hand); b.rotation.x = d.rx; build(b, d.ps); if (d.glow) { const s = glow(d.glow.c, d.glow.s, 0.75); s.position.y = d.glow.y; b.add(s); } wpn = b; extra.push(b); },
+    setWeapon(w) { for (const e of extra) e.parent.remove(e); extra = []; wpn = null; wtype = w ? w.wt : null; H.armed = !!w; if (!w) return; const d = weaponPieces(w), hand = d.left ? handL : handR, b = bone(hand); b.rotation.x = d.rx; build(b, d.ps); if (d.glow) { const s = glow(d.glow.c, d.glow.s, 0.75); s.position.y = d.glow.y; b.add(s); } if (w.rar) { const s = glow(w.rar, 2.6, 0.55); s.position.y = d.left ? -0.3 : 1.0; b.add(s); } wpn = b; extra.push(b); },
     setBoard(tier) { while (boardB.children.length) boardB.remove(boardB.children[0]); if (tier) { build(boardB, boardPieces(tier)); boardB.add(glow(tier > 1 ? 0xffe07a : 0x7fe8ff, 5, 0.5)); } H.boardC = tier > 1 ? 0xffd870 : 0x8ff0ff; },
     play(kind) { if (kind === 'attack' || kind === 'skill') kind = wtype === 'sword' || wtype === 'hammer' ? 'slash' : wtype === 'staff' ? 'cast' : wtype === 'bow' ? 'shoot' : 'punch'; H.a = { kind, t: 0, d: kind === 'spin' ? 0.55 : kind === 'cast' ? 0.5 : 0.42 }; },
     a: null, t: rnd(0, 9), ph: 0, run: 0, fly: 0, air: 0, dead: 0, look: 0,
@@ -201,6 +201,7 @@ GFX.human = function (o) {
     },
     handPos(v) { return (wpn || handR).getWorldPosition(v); },
   };
+  if (o.aura) { const a = glow(o.aura, 5, 0.3); a.position.y = 1.4; rig.add(a); }
   H.setWeapon(o.weapon || null); if (o.scale) g.scale.setScalar(o.scale);
   return H;
 };
@@ -211,7 +212,7 @@ const glowEyes = (y, z, sp, s, c) => [-1, 1].map(d => pc('sph', c, [d * sp, y, z
 const P = () => GFX.particles();
 const MOBS = {
   blob(g, d) {
-    const c = d.color, b = bone(g), honey = d.id === 'honig', ps = [pc('sph', shade(c, -0.25), [0, 0.72, 0], [1.8, 1.4, 1.8], null, 'jelly', { top: shade(c, 0.15), g: 0.2 }), pc('sph', 0xffffff, [-0.42, 1.1, 0.5], [0.42, 0.22, 0.2], [0, 0, 0.5], 'glow'), pc('sph', 0xffffff, [-0.62, 0.88, 0.5], 0.1, null, 'glow'), cuteEyes(0.82, 0.8, 0.31, 0.3), pc('sph', 0x7a2a3a, [0, 0.56, 0.87], [0.2, 0.13, 0.1], null, 'matte')];
+    const c = d.color, b = bone(g), honey = d.crown, ps = [pc('sph', shade(c, -0.25), [0, 0.72, 0], [1.8, 1.4, 1.8], null, 'jelly', { top: shade(c, 0.15), g: 0.2 }), pc('sph', 0xffffff, [-0.42, 1.1, 0.5], [0.42, 0.22, 0.2], [0, 0, 0.5], 'glow'), pc('sph', 0xffffff, [-0.62, 0.88, 0.5], 0.1, null, 'glow'), cuteEyes(0.82, 0.8, 0.31, 0.3), pc('sph', 0x7a2a3a, [0, 0.56, 0.87], [0.2, 0.13, 0.1], null, 'matte')];
     for (const s of [-1, 1]) ps.push(pc('sph', 0xff8fa8, [s * 0.56, 0.62, 0.72], [0.22, 0.12, 0.1], null, 'matte'), pc('sph', shade(c, -0.25), [s * 0.5, 0.12, 0.25], [0.5, 0.26, 0.6], null, 'jelly'));
     if (honey) { ps.push(pc('cyl', GOLD, [0, 1.46, 0], [0.56, 0.16, 0.56], null, 'metal')); for (let i = 0; i < 5; i++) { const a = i / 5 * PI * 2; ps.push(pc('cone', GOLD, [Math.cos(a) * 0.22, 1.66, Math.sin(a) * 0.22], [0.16, 0.32, 0.16], null, 'metal')); } ps.push(pc('sph', 0xff5a7a, [0, 1.6, 0.26], 0.1, null, 'glow')); for (let i = 0; i < 3; i++) ps.push(pc('sph', 0xffe9a0, [-0.5 + i * 0.5, 1.2 - (i % 2) * 0.2, -0.55], [0.26, 0.4, 0.2], null, 'jelly')); }
     else ps.push(pc('cyl', 0x3f8f3a, [0, 1.5, 0], [0.07, 0.36, 0.07], null, 'matte'), pc('sph', 0x5fc04a, [0.26, 1.7, 0], [0.5, 0.08, 0.28], [0, 0, 0.5], 'matte'), pc('sph', 0x5fc04a, [-0.26, 1.7, 0], [0.5, 0.08, 0.28], [0, 0, -0.5], 'matte'));
@@ -219,7 +220,7 @@ const MOBS = {
     return (t, s) => { const h = Math.abs(Math.sin(t * (s.chase ? 5.2 : 3))); b.position.y = h * (s.moving ? 0.7 : 0.25); b.scale.set(1 + (1 - h) * 0.16, 0.8 + h * 0.32, 1 + (1 - h) * 0.16); b.position.z = s.lunge * 0.9; };
   },
   mushroom(g, d) {
-    const c = d.color, gift = d.id === 'giftpilz', b = bone(g), capB = bone(b, 0, 1.02, 0), ps = [pc(lathe([[0.01, 0], [0.5, 0], [0.58, 0.3], [0.48, 0.9], [0.42, 1.12], [0.01, 1.16]]), 0xf4ead6, null, null, null, 'matte', { g: 0.3 }), cuteEyes(0.7, 0.5, 0.2, 0.2, gift ? 0x3a1050 : 0x1a1a2a), pc('sph', 0x8a3a3a, [0, 0.5, 0.56], [0.12, 0.08, 0.06], null, 'matte')];
+    const c = d.color, gift = d.toxic, b = bone(g), capB = bone(b, 0, 1.02, 0), ps = [pc(lathe([[0.01, 0], [0.5, 0], [0.58, 0.3], [0.48, 0.9], [0.42, 1.12], [0.01, 1.16]]), 0xf4ead6, null, null, null, 'matte', { g: 0.3 }), cuteEyes(0.7, 0.5, 0.2, 0.2, gift ? 0x3a1050 : 0x1a1a2a), pc('sph', 0x8a3a3a, [0, 0.5, 0.56], [0.12, 0.08, 0.06], null, 'matte')];
     for (const s of [-1, 1]) ps.push(pc('sph', 0xff9aa8, [s * 0.34, 0.54, 0.44], [0.14, 0.08, 0.08], null, 'matte'), pc('sph', 0xe8dcc4, [s * 0.62, 0.58, 0.1], [0.34, 0.18, 0.2], [0, 0, s * 0.5], 'matte'), pc('sph', 0xc8a878, [s * 0.26, 0.1, 0.16], [0.36, 0.22, 0.48], null, 'matte'));
     build(b, ps);
     const cp = [pc(lathe([[0.4, 0.02], [1.2, -0.1], [1.4, 0.02], [1.34, 0.3], [1.02, 0.68], [0.5, 0.92], [0.01, 0.98]], 16), c, null, null, null, 'gloss', { top: shade(c, 0.4), g: 0.25 }), pc('cyl', 0xf0d8c0, [0, 0.0, 0], [2.3, 0.05, 2.3], null, 'matte')];
@@ -237,7 +238,7 @@ const MOBS = {
     return (t, s) => { const w = s.moving ? 1 : 0.15; for (const l of legs) { l.lb.rotation.z = Math.sin(t * 12 + l.i * 2.1 + (l.s > 0 ? 1 : 0)) * 0.3 * w; l.lb.rotation.y = Math.cos(t * 12 + l.i * 2.1) * 0.25 * w; } b.position.y = Math.abs(Math.sin(t * 6)) * 0.06 * w; b.rotation.z = Math.sin(t * 6) * 0.03; for (const k of claws) { k.cb.rotation.y = k.s * (0.25 + Math.sin(t * 2 + k.s) * 0.12) - k.s * s.lunge * 0.5; k.cb.rotation.x = -0.25 - s.lunge * 0.5; k.jb.rotation.x = 0.3 + Math.sin(t * 3 + k.s) * 0.2 + s.lunge * 0.5; } };
   },
   golem(g, d) {
-    const boss = d.model === 'boss', c = boss ? 0x4a5c94 : d.color, c2 = shade(c, -0.28), gc = boss ? 0x7fe8ff : 0xffb040, moss = (x, y, z, ny, r, gg, b) => !boss && ny > 0.5 ? [lerp(r, 0.2, 0.7), lerp(gg, 0.36, 0.7), lerp(b, 0.12, 0.7)] : null;
+    const boss = d.model === 'boss', c = d.color, c2 = shade(c, -0.28), gc = d.glow || 0xffb040, moss = (x, y, z, ny, r, gg, b) => !d.glow && ny > 0.5 ? [lerp(r, 0.2, 0.7), lerp(gg, 0.36, 0.7), lerp(b, 0.12, 0.7)] : null;
     const b = bone(g), torso = bone(b, 0, 1.75, 0), head = bone(torso, 0, 1.3, 0.15), tp = [pc('rock', c, [0, 0, 0], [2.4, 2.3, 1.9], null, 'stone', { f: moss, g: 0.3 }), pc('rock2', c2, [0, -1.0, 0], [1.7, 1.0, 1.5], null, 'stone'), pc('sph', gc, [0, 0.15, 0.78], [0.62, 0.62, 0.4], null, 'glow', { top: 0xffffff })];
     for (const q of [[0.42, 0.5, 0.86, 0.5], [-0.46, 0.4, 0.84, -0.6], [0.3, -0.4, 0.8, -0.3], [-0.2, -0.5, 0.8, 0.5]]) tp.push(pc('box', gc, [q[0], q[1], q[2]], [0.07, 0.62, 0.07], [0, 0, q[3]], 'glow'));
     for (const s of [-1, 1]) tp.push(pc('cone4', gc, [s * 0.55, 0.95, -0.75], [0.42, 1.3, 0.42], [-0.6, 0, -s * 0.35], 'glow', { top: 0xffffff }), pc('cone4', gc, [s * 0.2, 0.55, -0.95], [0.3, 0.9, 0.3], [-0.9, 0, -s * 0.2], 'glow'));
@@ -292,7 +293,7 @@ const MOBS = {
     return (t, s) => { b.position.y = 1.0 + Math.sin(t * 1.8) * 0.3; b.rotation.z = Math.sin(t * 1.4) * 0.07; b.rotation.x = s.moving ? 0.2 : 0.02; b.position.z = s.lunge * 0.9; for (const a of arms) { a.ab.rotation.x = Math.sin(t * 2 + a.s) * 0.2 - 0.2 - s.lunge * 1.1 - (s.chase ? 0.5 : 0); a.ab.rotation.z = a.s * 0.15; } eg.material.opacity = 0.5 + Math.sin(t * 6) * 0.2; if (Math.random() < 0.12) P().norm.emit({ x: g.parent.position.x + rnd(-0.7, 0.7), y: g.parent.position.y + rnd(1, 2.5) * d.scale, z: g.parent.position.z + rnd(-0.7, 0.7), vy: 1.4, life: 1.2, size: 0.8, c: 0x8a8078, c2: 0x3a3430, wob: 1 }); };
   },
   guardian(g, d) {
-    const W = 0xf6f8ff, b = bone(g, 0, 1.2, 0), ps = [pc('sph', W, [0, 1.9, 0], [1.35, 1.5, 1.0], null, 'gloss', { g: 0.25 }), pc('sph', GOLD, [0, 2.08, 0.2], [1.05, 0.9, 0.76], null, 'metal', { g: 0.3 }), pc('oct', 0x6fd8ff, [0, 2.1, 0.6], [0.3, 0.4, 0.14], null, 'glow'), pc('cone', W, [0, 0.72, 0], [1.05, 1.6, 0.9], [PI, 0, 0], 'matte', { g: 0.4 }), pc('tor', GOLD, [0, 1.36, 0], [1.1, 0.86, 0.9], [PI / 2, 0, 0], 'metal')];
+    const W = d.color, b = bone(g, 0, 1.2, 0), ps = [pc('sph', W, [0, 1.9, 0], [1.35, 1.5, 1.0], null, 'gloss', { g: 0.25 }), pc('sph', GOLD, [0, 2.08, 0.2], [1.05, 0.9, 0.76], null, 'metal', { g: 0.3 }), pc('oct', 0x6fd8ff, [0, 2.1, 0.6], [0.3, 0.4, 0.14], null, 'glow'), pc('cone', W, [0, 0.72, 0], [1.05, 1.6, 0.9], [PI, 0, 0], 'matte', { g: 0.4 }), pc('tor', GOLD, [0, 1.36, 0], [1.1, 0.86, 0.9], [PI / 2, 0, 0], 'metal')];
     for (let i = 0; i < 6; i++) { const a = i / 6 * PI * 2; ps.push(pc('blob', 0xffffff, [Math.cos(a) * 0.55, 0.05 + (i % 2) * 0.2, Math.sin(a) * 0.5], [0.9, 0.6, 0.9], null, 'ghost')); }
     build(b, ps);
     const head = bone(b, 0, 3.05, 0); build(head, [pc('sph', W, [0, 0, 0], [0.98, 1.02, 0.98], null, 'gloss'), pc('box', 0x6fd8ff, [0, 0.02, 0.43], [0.62, 0.13, 0.14], null, 'glow'), pc('box', GOLD, [0, 0.42, -0.04], [0.1, 0.56, 0.86], null, 'metal'), pc('sph', GOLD, [-0.46, -0.14, 0.1], [0.14, 0.5, 0.5], null, 'metal'), pc('sph', GOLD, [0.46, -0.14, 0.1], [0.14, 0.5, 0.5], null, 'metal'), pc('torT', 0xffe07a, [0, 0.86, 0], [1.35, 1.35, 1.6], [PI / 2, 0, 0], 'glow')]); const hg = glow(0xffe07a, 2.6, 0.5); hg.position.y = 0.86; head.add(hg);
