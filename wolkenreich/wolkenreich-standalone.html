@@ -138,6 +138,9 @@ button.big{font-size:18px;padding:11px 26px;font-weight:bold}
 #winMap{left:50%;top:50%;transform:translate(-50%,-50%);width:min(640px,96vw);max-height:96vh;z-index:5}
 #bigmap{display:block;width:100%;height:auto;max-height:calc(96vh - 110px);object-fit:contain;border-radius:8px;border:1px solid #d9b765;background:#16305a}
 .maplegend{margin-top:6px;font-size:12px}
+
+#tip{z-index:99999}
+.wt{user-select:none}
 </style>
 </head>
 <body>
@@ -1663,7 +1666,24 @@ $('#npcBody').addEventListener('click', e => {
 });
 
 /* ---------- Fenster ---------- */
-function showWin(id, on) { const w = $('#' + id); w.classList.toggle('hidden', !on); if (!on && id === 'winNpc') { curNpc = null; shopOpen = false; renderInv(); } if (on) { renderChar(); renderInv(); renderQuests(); } }
+// Alle Fenster und Anzeigen lassen sich verschieben; die Position wird gemerkt
+const WINPOS_KEY = 'wolkenreich_winpos'; let winPos = {}, zTop = 10; try { winPos = JSON.parse(localStorage.getItem(WINPOS_KEY)) || {}; } catch (e) { /* egal */ }
+function placeWin(el, x, y) { const w = el.offsetWidth || 200; x = clamp(x, 70 - w, window.innerWidth - 70); y = clamp(y, 0, window.innerHeight - 36); for (const [k, v] of [['left', x + 'px'], ['top', y + 'px'], ['right', 'auto'], ['bottom', 'auto'], ['margin', '0'], ['transform', 'none']]) el.style.setProperty(k, v, 'important'); }
+function makeDraggable(el, handle) {
+  handle.style.cursor = 'move'; handle.style.touchAction = 'none';
+  el.addEventListener('pointerdown', () => { el.style.zIndex = ++zTop; });
+  handle.addEventListener('pointerdown', e => {
+    if (e.button > 0 || e.target.closest('.x, button, input')) return; const r = el.getBoundingClientRect(), ox = e.clientX - r.left, oy = e.clientY - r.top; placeWin(el, r.left, r.top); handle.setPointerCapture(e.pointerId); e.preventDefault();
+    const mv = ev => placeWin(el, ev.clientX - ox, ev.clientY - oy), up = () => { handle.removeEventListener('pointermove', mv); handle.removeEventListener('pointerup', up); handle.removeEventListener('pointercancel', up); const q = el.getBoundingClientRect(); winPos[el.id] = [Math.round(q.left), Math.round(q.top)]; try { localStorage.setItem(WINPOS_KEY, JSON.stringify(winPos)); } catch (er) { /* egal */ } };
+    handle.addEventListener('pointermove', mv); handle.addEventListener('pointerup', up); handle.addEventListener('pointercancel', up);
+  });
+}
+document.querySelectorAll('.win').forEach(w => makeDraggable(w, w.querySelector('.wt')));
+for (const id of ['pframe', 'tframe', 'mapbox']) makeDraggable($('#' + id), $('#' + id));
+const restoreWins = () => { for (const id in winPos) { const el = $('#' + id); if (el && !el.classList.contains('hidden')) placeWin(el, winPos[id][0], winPos[id][1]); } };
+window.addEventListener('resize', restoreWins);
+function resetWins() { winPos = {}; try { localStorage.removeItem(WINPOS_KEY); } catch (e) { /* egal */ } document.querySelectorAll('.win, #pframe, #tframe, #mapbox').forEach(el => { for (const k of ['left', 'top', 'right', 'bottom', 'margin', 'transform']) el.style.removeProperty(k); }); log('Alle Fenster stehen wieder am ursprünglichen Platz.', 'e'); }
+function showWin(id, on) { const w = $('#' + id); w.classList.toggle('hidden', !on); if (on) { w.style.zIndex = ++zTop; if (winPos[id]) placeWin(w, winPos[id][0], winPos[id][1]); } if (!on && id === 'winNpc') { curNpc = null; shopOpen = false; renderInv(); } if (on) { renderChar(); renderInv(); renderQuests(); } }
 const toggleWin = id => showWin(id, $('#' + id).classList.contains('hidden'));
 document.querySelectorAll('.win .x').forEach(x => x.addEventListener('click', () => showWin(x.closest('.win').id, false)));
 document.querySelectorAll('#menu button').forEach(b => b.addEventListener('click', () => toggleWin(b.dataset.win)));
@@ -1674,10 +1694,11 @@ Monster mit <b style="color:#ff6a5a">rotem Namen</b> greifen von selbst an. <b>K
 <kbd>F</kbd> fliegen (Flugbrett nötig) – <kbd>Leertaste</kbd> steigen, <kbd>X</kbd> sinken<br>
 <kbd>C</kbd> Charakter · <kbd>I</kbd> Inventar · <kbd>L</kbd> Quests · <kbd>M</kbd> Karte · <kbd>H</kbd> Hilfe · <kbd>Esc</kbd> schließen<br>
 <b>Klick auf Dorfbewohner</b> zum Reden. Die vier <b>Dungeon-Portale</b> stehen rund ums Dorf (hellblaue Punkte auf der Karte). <b>Wegsteine</b> in Dörfern und Stationen erlauben Schnellreisen zu besuchten Orten. Der Spielstand wird automatisch gespeichert.<br>
-<span class="gfxrow">Grafik: <button data-q="hoch">Hoch</button> <button data-q="mittel">Mittel</button> <button data-q="niedrig">Niedrig</button></span>`;
+<span class="gfxrow">Grafik: <button data-q="hoch">Hoch</button> <button data-q="mittel">Mittel</button> <button data-q="niedrig">Niedrig</button></span><br>
+<b>Fenster verschieben:</b> an der Titelleiste ziehen (Lebensanzeige, Ziel und Minikarte direkt anfassen). <button data-resetwin="1">Fenster zurücksetzen</button>`;
 document.querySelectorAll('.helpBody').forEach(e => e.innerHTML = HELP);
 const markQ = () => document.querySelectorAll('[data-q]').forEach(b => { b.style.outline = b.dataset.q === GFX.quality ? '2px solid #fff' : 'none'; });
-document.addEventListener('click', e => { const q = e.target.dataset && e.target.dataset.q; if (q) { GFX.auto = false; GFX.setQuality(q); markQ(); } });
+document.addEventListener('click', e => { if (e.target.dataset && e.target.dataset.resetwin) return resetWins(); const q = e.target.dataset && e.target.dataset.q; if (q) { GFX.auto = false; GFX.setQuality(q); markQ(); } });
 GFX.onQuality = q => { markQ(); log(`Grafikqualität automatisch auf „${q}“ gesenkt (änderbar unter Hilfe).`, 'e'); };
 markQ();
 
