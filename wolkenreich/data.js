@@ -70,6 +70,17 @@ const WR = (() => {
     { name: 'Gold',    col: '#ffd23c', hex: 0xffd23c, m: 1.32, sell: 4,  w: 11.5 },
     { name: 'Platin',  col: '#8ff0d8', hex: 0x8ff0d8, m: 1.52, sell: 8,  w: 4.5 },
     { name: 'Diamant', col: '#7fd0ff', hex: 0x7fd0ff, m: 1.8,  sell: 18, w: 1 },
+    // Nur Waffen, nur von Bossen: fester Grad, wird nie zufällig gewürfelt
+    { name: 'Legendär', col: '#ff9a2a', hex: 0xff9a2a, m: 2.3, sell: 40, w: 0 },
+    { name: 'Blutig',   col: '#ff3048', hex: 0xff3048, m: 2.7, sell: 60, w: 0 },
+  ];
+  // Set-Bonus: alle vier Rüstungsteile (Helm, Rüstung, Handschuhe, Stiefel) im selben Seltenheitsgrad
+  const SETS = [
+    { name: 'Bronze-Set',  hp: 1.06, def: 1.08, text: '+6 % Leben, +8 % Verteidigung' },
+    { name: 'Silber-Set',  hp: 1.10, def: 1.15, text: '+10 % Leben, +15 % Verteidigung' },
+    { name: 'Gold-Set',    hp: 1.15, def: 1.15, atk: 1.10, text: '+15 % Leben, +15 % Verteidigung, +10 % Angriff' },
+    { name: 'Platin-Set',  hp: 1.22, def: 1.2, atk: 1.16, crit: 0.05, text: '+22 % Leben, +20 % Verteidigung, +16 % Angriff, +5 % kritische Treffer' },
+    { name: 'Diamant-Set', hp: 1.32, def: 1.3, atk: 1.25, crit: 0.10, spd: 1.12, text: '+32 % Leben, +30 % Verteidigung, +25 % Angriff, +10 % kritische Treffer, +12 % Lauftempo' },
   ];
 
   const ITEMS = {};
@@ -89,6 +100,16 @@ const WR = (() => {
   [['Reisegewand', 3, 1, 30], ['Lederwams', 8, 5, 260], ['Gardistentracht', 16, 10, 1000], ['Runengewand', 28, 18, 4600], ['Himmelstracht', 44, 26, 14000]]
     .forEach((a, i) => I('a_' + i, { name: a[0], type: 'armor', def: a[1], lvl: a[2], price: a[3], icon: i < 2 ? '👕' : '🥋' }));
   PRE.forEach((n, i) => I('a_' + (i + 5), { name: n + 'rüstung', type: 'armor', def: TD[i + 3], lvl: TL[i + 3], price: Math.round(TP[i + 3] * 0.85 / 100) * 100, icon: '🛡️' }));
+  // Helm, Handschuhe, Stiefel passend zu jeder Rüstungsstufe
+  const ROOT = ['Reise', 'Leder', 'Gardisten', 'Runen', 'Himmels'].concat(PRE), AL = [1, 5].concat(TL), AD = [3, 8].concat(TD), AP = [30, 260].concat(TP.map(v => Math.round(v * 0.85 / 100) * 100));
+  ROOT.forEach((n, i) => { for (const [k, type, suf, f, icon] of [['h', 'helm', 'helm', 0.5, '🪖'], ['g', 'gloves', 'handschuhe', 0.35, '🧤'], ['f', 'boots', 'stiefel', 0.4, '🥾']]) I(k + '_' + i, { name: n + suf, type, def: Math.max(1, Math.round(AD[i] * f)), lvl: AL[i], price: Math.max(20, Math.round(AP[i] * f / 10) * 10), icon }); });
+  // Legendäre (ab 60) und blutige (ab 80) Waffen: fester Seltenheitsgrad fr, starke Boni
+  const LEG = { klinge: 'Aurelion, Klinge der Morgenröte', arkanist: 'Astralis, Stab der Sterne', waldlaeufer: 'Zephyra, Bogen des Sturms', kleriker: 'Solaris, Zepter des Lichts' };
+  const BLD = { klinge: 'Sanguis, die Blutklinge', arkanist: 'Cruor, der Blutstab', waldlaeufer: 'Vena, der Blutbogen', kleriker: 'Haema, das Blutzepter' };
+  for (const c in cw) for (let i = 6; i < 10; i++) {
+    I('l_' + c + i, { name: LEG[c], type: 'weapon', wt: cw[c][0], cls: c, atk: TA[i], lvl: TL[i], price: TP[i], icon: '🌟', fr: 5, bonus: { crit: 0.12, aspd: 1.15, hp: 1.15 }, desc: 'Legendär. Nur die mächtigsten Bosse tragen solche Waffen bei sich.' });
+    if (i >= 8) I('b_' + c + i, { name: BLD[c], type: 'weapon', wt: cw[c][0], cls: c, atk: TA[i], lvl: TL[i], price: TP[i], icon: '🩸', fr: 6, bonus: { crit: 0.15, atk: 1.12, leech: 0.06 }, desc: 'Getränkt im Blut der Bosse. Jeder Treffer nährt ihren Träger.' });
+  }
   I('apfel',   { name: 'Apfel',             type: 'use', hp: 60,  price: 15,  icon: '🍎' });
   I('hp1',     { name: 'Heiltrank',         type: 'use', hp: 220, price: 90,  icon: '🧪' });
   I('hp2',     { name: 'Großer Heiltrank',  type: 'use', hp: 650, price: 340, icon: '❤️‍🩹', lvl: 15 });
@@ -108,6 +129,7 @@ const WR = (() => {
   drop('eisgelee', 'Frostgelee', 300, '🔵'); drop('eispelz', 'Eispelz', 380, '🧣'); drop('moorkappe', 'Moorkappe', 460, '🍄'); drop('moorschere', 'Moorschere', 540, '🦞');
   drop('rune', 'Runenstein', 640, '🗿'); drop('fluchstoff', 'Fluchgewebe', 760, '🧵'); drop('magma', 'Magmapanzer', 900, '🌋'); drop('lavakern', 'Lavakern', 1050, '🔥');
   drop('sternstaub', 'Sternenstaub', 1250, '✨'); drop('ritterfeder', 'Goldfeder', 1450, '🪽'); drop('leerenpelz', 'Leerenpelz', 1700, '🌑'); drop('leerenasche', 'Leerenasche', 1950, '🕳️');
+  drop('marke1', 'Wurzelsiegel', 260, '🌿'); drop('marke2', 'Frostsiegel', 700, '❄️'); drop('marke3', 'Glutsiegel', 1500, '🔥'); drop('marke4', 'Leerensiegel', 2800, '🌌');
   drop('aeonensplitter', 'Äonensplitter', 2300, '🔹'); drop('weltenherz', 'Herz der Welt', 90000, '🌍', 'Die Quelle aller Stürme.');
 
   // Monster: hp/atk/def/exp werden aus dem Level berechnet
@@ -138,11 +160,29 @@ const WR = (() => {
     leerengeist:{ name: 'Leerengeist',   lvl: 89, model: 'ghost',    color: 0x30204a, scale: 2.0, drop: 'leerenasche', aggro: true },
     aeonenwaechter:{ name: 'Äonenwächter', lvl: 95, model: 'guardian', color: 0xc8b0ff, scale: 2.3, drop: 'aeonensplitter', aggro: true },
     weltenkoloss:{ name: 'Weltenkoloss', lvl: 100, model: 'boss',    color: 0x4a2a5a, glow: 0xff7ae0, scale: 4.4, drop: 'weltenherz', aggro: true, boss: true },
+    // Dungeon-Monster (Elite) und Endbosse
+    d1a: { name: 'Wurzelpuffel',  lvl: 24, model: 'blob',     color: 0x4f8a3a, scale: 1.5, drop: 'marke1', aggro: true, elite: true },
+    d1b: { name: 'Grabpilz',      lvl: 30, model: 'mushroom', color: 0x6a7a2a, scale: 1.6, drop: 'marke1', aggro: true, elite: true, toxic: true },
+    d1c: { name: 'Moderwolf',     lvl: 36, model: 'wolf',     color: 0x3a4a2a, scale: 1.5, drop: 'marke1', aggro: true, elite: true, speed: 7 },
+    d1boss: { name: 'Wurzelkönig Morg', lvl: 40, model: 'mushroom', color: 0x3f7a2a, scale: 4.4, drop: 'marke1', aggro: true, boss: true, toxic: true },
+    d2a: { name: 'Frostkrabbe',   lvl: 44, model: 'crab',     color: 0x9fd0f0, scale: 1.6, drop: 'marke2', aggro: true, elite: true },
+    d2b: { name: 'Eisgolem',      lvl: 50, model: 'golem',    color: 0xb8d8f0, glow: 0x7fe8ff, scale: 1.8, drop: 'marke2', aggro: true, elite: true },
+    d2c: { name: 'Frostgeist',    lvl: 56, model: 'ghost',    color: 0xc8e8ff, scale: 1.7, drop: 'marke2', aggro: true, elite: true },
+    d2boss: { name: 'Eiskönigin Ysra', lvl: 60, model: 'ghost', color: 0x9fd8ff, scale: 3.8, drop: 'marke2', aggro: true, boss: true },
+    d3a: { name: 'Glutwolf',      lvl: 64, model: 'wolf',     color: 0x5a2418, scale: 1.7, drop: 'marke3', aggro: true, elite: true, speed: 8 },
+    d3b: { name: 'Schlackenkäfer', lvl: 70, model: 'beetle',  color: 0xff4a1a, scale: 1.9, drop: 'marke3', aggro: true, elite: true },
+    d3c: { name: 'Flammenlicht',  lvl: 76, model: 'wisp',     color: 0xff7a2a, scale: 1.6, drop: 'marke3', aggro: true, elite: true },
+    d3boss: { name: 'Flammenfürst Kharn', lvl: 80, model: 'boss', color: 0x3a1c18, glow: 0xff6a1a, scale: 4.0, drop: 'marke3', aggro: true, boss: true },
+    d4a: { name: 'Leerenkrabbe',  lvl: 84, model: 'crab',     color: 0x3a2a5a, scale: 1.9, drop: 'marke4', aggro: true, elite: true },
+    d4b: { name: 'Leerenritter',  lvl: 90, model: 'guardian', color: 0x4a3a7a, scale: 2.1, drop: 'marke4', aggro: true, elite: true },
+    d4c: { name: 'Leerenlicht',   lvl: 96, model: 'wisp',     color: 0xb060ff, scale: 1.8, drop: 'marke4', aggro: true, elite: true },
+    d4boss: { name: 'Nihil, der Leerenherrscher', lvl: 100, model: 'guardian', color: 0x2a1c4a, scale: 4.6, drop: 'marke4', aggro: true, boss: true },
   };
   for (const k in MOBS) {
     const m = MOBS[k], L = m.lvl; m.id = k;
     m.hp = Math.round(30 + L * 14 + L * L * 2.2); m.atk = Math.round(4 + L * 2.6 + L * L * 0.022); m.def = Math.round(L * 1.2);
     m.exp = Math.round(10 + L * L * 1.6); m.gold = [L * 3, Math.round(L * 7 + L * L * 0.15)]; m.speed = m.speed || 5;
+    if (m.elite) { m.hp = Math.round(m.hp * 2.2); m.atk = Math.round(m.atk * 1.25); m.exp = Math.round(m.exp * 2.6); m.gold = m.gold.map(v => v * 2); }
     if (m.boss) { m.hp *= 14; m.atk = Math.round(m.atk * 1.7); m.exp *= 18; m.gold = [L * 130, L * 190]; }
   }
 
@@ -164,6 +204,14 @@ const WR = (() => {
     { x: -210, z: -330, y: 125, r: 48, name: 'Sternenarchipel', mobs: [['sternlicht', 6], ['himmelsritter', 5]] },
     { x: 360,  z: -250, y: 155, r: 50, name: 'Leerenriff', mobs: [['leerenwolf', 6], ['leerengeist', 5]] },
     { x: -370, z: 110,  y: 185, r: 58, name: 'Thron der Äonen', mobs: [['aeonenwaechter', 7], ['weltenkoloss', 1]] },
+  ];
+
+  // Dungeons: drei Räume mit Elite-Monstern, am Ende der Endboss. mood = Himmel/Licht im Inneren
+  const DUNGEONS = [
+    { id: 'krypta', name: 'Wurzelkrypta', lvl: 20, max: 40, col: 0x6a8a5a, wall: 0x5a6a4a, glow: 0x9fff6a, amb: 'wald', mobs: ['d1a', 'd1b', 'd1c'], boss: 'd1boss', mood: { top: 0x0a1810, mid: 0x1c3a2a, hor: 0x3a5a44, fog: 0x22382a, sun: 1.0, hemi: 0.5, water: 0x143a2a } },
+    { id: 'gruft',  name: 'Frostgruft',   lvl: 40, max: 60, col: 0x9fb8d0, wall: 0x7a94b0, glow: 0x7fe8ff, amb: 'frost', mobs: ['d2a', 'd2b', 'd2c'], boss: 'd2boss', mood: { top: 0x0c1830, mid: 0x2a4a7a, hor: 0x6a8ab8, fog: 0x3a5a88, sun: 1.2, hemi: 0.6, water: 0x1c3a6a } },
+    { id: 'kern',   name: 'Glutkern',     lvl: 60, max: 80, col: 0x7a4a3a, wall: 0x4a2a24, glow: 0xff7a2a, amb: 'glut', mobs: ['d3a', 'd3b', 'd3c'], boss: 'd3boss', mood: { top: 0x1a0606, mid: 0x5a1a0c, hor: 0xb8401a, fog: 0x5a2010, sun: 1.3, hemi: 0.5, water: 0x8a2a0c } },
+    { id: 'spalt',  name: 'Leerenspalt',  lvl: 80, max: 100, col: 0x5a4a8a, wall: 0x3a2a5a, glow: 0xb060ff, amb: 'ruinen', mobs: ['d4a', 'd4b', 'd4c'], boss: 'd4boss', mood: { top: 0x040208, mid: 0x1c0c3a, hor: 0x4a2a7a, fog: 0x1c1030, sun: 0.9, hemi: 0.5, water: 0x1a0c3a } },
   ];
 
   const NPCS = [
@@ -209,5 +257,5 @@ const WR = (() => {
   const MAXLVL = 100;
   const expNeed = l => Math.floor(40 * Math.pow(l, 1.9));
 
-  return { CLASSES, SPECS, SKILLS, RAR, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed };
+  return { CLASSES, SPECS, SKILLS, RAR, SETS, DUNGEONS, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed };
 })();

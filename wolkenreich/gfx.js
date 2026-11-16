@@ -169,7 +169,8 @@ function makeMaterials() {
 }
 
 /* ---------- Renderer & Szene ---------- */
-let renderer, scene, camera, sun, hemi, dome, water, env, quality = 'hoch';
+let renderer, scene, camera, sun, hemi, dome, water, env, skyMat, quality = 'hoch';
+const farIsles = [];
 const vegChunks = [], groundMeshes = [], anims = [], grassCells = [], clouds = [], blockers = [], colliders = [];
 const SUN = new T.Vector3(0.55, 0.72, 0.42).normalize();
 function init(canvas, e) {
@@ -179,7 +180,7 @@ function init(canvas, e) {
   scene = new T.Scene(); scene.fog = new T.Fog(0xc4e2f4, 190, 620);
   camera = new T.PerspectiveCamera(52, 1, 0.4, 2600);
   // Himmel
-  const skyMat = new T.ShaderMaterial({
+  skyMat = new T.ShaderMaterial({
     side: T.BackSide, depthWrite: false, fog: false, uniforms: { top: { value: new T.Color(0x2f7fe0) }, mid: { value: new T.Color(0x8fc8f5) }, hor: { value: new T.Color(0xd8ecf8) }, sunDir: { value: SUN }, sunCol: { value: new T.Color(0xfff1c8) }, uK: { value: 1 } },
     vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
     fragmentShader: `varying vec3 vP; uniform vec3 top, mid, hor, sunDir, sunCol; uniform float uK;
@@ -248,7 +249,7 @@ function buildWorld() {
   const tint = (a, b) => { const k = sr(a, b); return col.setRGB(k, k * sr(0.96, 1.04), k * sr(0.94, 1.02)).getHex(); };
   for (let n = 0; n < 4400; n++) {
     const x = sr(-440, 440), z = sr(-440, 440), d = Math.hypot(x, z), h = terrainH(x, z); if (d < 44 || d > 425 || h < -1.4) continue;
-    landColor(x, z, h, cc); if (cc[3] > 0.25) continue; const zn = zoneAt(x, z, 1.1), q = sr();
+    landColor(x, z, h, cc); if (cc[3] > 0.25) continue; if (d < 75 && [0, 1, 2, 3].some(i => Math.hypot(x - Math.cos(0.98 + i * PI / 2) * 58, z - Math.sin(0.98 + i * PI / 2) * 58) < 11)) continue; const zn = zoneAt(x, z, 1.1), q = sr();
     if (zn === 'frost') { if (q < 0.45) add('pine', x, z, sr(0.8, 1.5), 0xdfeaf2); else if (q < 0.7) add(q < 0.58 ? 'rock' : 'rock2', x, z, sr(1, 3.6), 0xe6eef6); else if (q < 0.8) add('icecrystal', x, z, sr(0.8, 1.8)); }
     else if (zn === 'moor') { if (q < 0.3) add('dark', x, z, sr(0.7, 1.2), tint(0.7, 0.9)); else if (q < 0.5) add('shroomP', x, z, sr(0.4, 1.3)); else if (q < 0.7) add('bush', x, z, sr(0.8, 1.6), tint(0.6, 0.8)); else if (q < 0.8) add('dead', x, z, sr(0.7, 1.1)); }
     else if (zn === 'ruinen') { if (q < 0.4) add('pillar', x, z, sr(0.8, 1.5)); else if (q < 0.65) add('rock2', x, z, sr(1, 3), tint(0.8, 1)); else if (q < 0.75) add('dead', x, z, sr(0.8, 1.2)); }
@@ -281,7 +282,7 @@ function buildWorld() {
   // Wolken
   for (let k = 0; k < 30; k++) { const g = new T.Group(), n = 5 + Math.floor(sr(0, 5)), sc = sr(0.7, 1.5); for (let q = 0; q < n; q++) { const low = q % 2, s = new T.Sprite(new T.SpriteMaterial({ map: TX.soft, color: low ? 0xc9d6ea : 0xffffff, transparent: true, opacity: low ? 0.75 : 0.95, depthWrite: false, fog: false })); s.scale.set(sr(70, 120) * sc, sr(42, 66) * sc, 1); s.position.set((q - n / 2) * 30 * sc + sr(-8, 8), low ? -9 * sc : sr(0, 12) * sc, sr(-16, 16)); g.add(s); } g.position.set(sr(-1100, 1100), k < 8 ? sr(30, 52) : sr(150, 320), sr(-1100, 1100)); scene.add(g); clouds.push(g); }
   // Ferne Inseln am Horizont
-  for (let k = 0; k < 16; k++) { const a = k / 16 * 6.28 + sr(0, 0.3), r = sr(900, 1300), s = sr(90, 220), gm = displaced(2, 1.4, 2.5, false); const m = new T.Mesh(gm, new T.MeshBasicMaterial({ color: col.setHex(0x7fa8c8).lerp(col2.setHex(0xc4e2f4), sr(0.25, 0.6)).getHex(), fog: false })); m.scale.set(s * 2.4, s * sr(0.9, 1.9), s * 2.4); m.position.set(Math.cos(a) * r, -s * 0.3, Math.sin(a) * r); scene.add(m); }
+  for (let k = 0; k < 16; k++) { const a = k / 16 * 6.28 + sr(0, 0.3), r = sr(900, 1300), s = sr(90, 220), gm = displaced(2, 1.4, 2.5, false); const m = new T.Mesh(gm, new T.MeshBasicMaterial({ color: col.setHex(0x7fa8c8).lerp(col2.setHex(0xc4e2f4), sr(0.25, 0.6)).getHex(), fog: false })); m.scale.set(s * 2.4, s * sr(0.9, 1.9), s * 2.4); m.position.set(Math.cos(a) * r, -s * 0.3, Math.sin(a) * r); scene.add(m); farIsles.push(m); }
 }
 
 function vegetationTypes() {
@@ -361,6 +362,41 @@ function buildTown() {
   // Bank & Aushang (Mira)
   props.push(xf([pc('box', 0x9a7248, [0, 0.6, 0], [3, 0.16, 0.9], null, 'wood'), pc('box', 0x9a7248, [0, 1.15, -0.4], [3, 0.7, 0.12], null, 'wood'), pc('box', 0x6a4a2c, [-1.3, 0.3, 0], [0.16, 0.6, 0.8], null, 'wood'), pc('box', 0x6a4a2c, [1.3, 0.3, 0], [0.16, 0.6, 0.8], null, 'wood')], [10, Y, 15], [0, 2.6, 0]), xf([pc('cyl6', 0x6a4a2c, [-1.2, 1.3, 0], [0.2, 2.6, 0.2], null, 'wood'), pc('cyl6', 0x6a4a2c, [1.2, 1.3, 0], [0.2, 2.6, 0.2], null, 'wood'), pc('box', 0x9a7248, [0, 1.9, 0], [2.6, 1.6, 0.14], null, 'wood'), pc(roofGeo(3.2, 0.8, 0.5), 0xb8433a, [0, 2.75, 0], null, null, 'roof'), [[-0.7, 2.1, 0xfff6dc], [0.1, 1.8, 0xffe9b0], [0.75, 2.15, 0xf2efe6]].map(q => pc('box', q[2], [q[0], q[1], 0.09], [0.6, 0.75, 0.02], [0, 0, sr(-0.15, 0.15)], 'matte'))], [2, Y, 16], [0, 2.9, 0]));
   build(town, props).forEach(m => { m.receiveShadow = true; });
+}
+
+/* ---------- Stimmung (Himmel, Licht, Nebel) ---------- */
+const MOOD0 = { top: 0x2f7fe0, mid: 0x8fc8f5, hor: 0xd8ecf8, fog: 0xc4e2f4, sun: 2.3, hemi: 0.75, water: 0x2a86c4 };
+function setMood(m) {
+  const dark = !!m; m = m || MOOD0; const u = skyMat.uniforms; u.top.value.setHex(m.top); u.mid.value.setHex(m.mid); u.hor.value.setHex(m.hor); u.sunCol.value.setHex(0xfff1c8).multiplyScalar(dark ? 0.12 : 1);
+  scene.fog.color.setHex(m.fog); scene.fog.near = dark ? 70 : 190; scene.fog.far = dark ? 330 : 620; sun.intensity = m.sun; hemi.intensity = m.hemi; water.material.color.setHex(m.water);
+  for (const c of clouds) c.visible = !dark; for (const c of farIsles) c.visible = !dark;
+  const es = new T.Scene(), old = scene.environment; es.add(dome); u.uK.value = 0; const pm = new T.PMREMGenerator(renderer); scene.environment = pm.fromScene(es, 0, 1, 5000).texture; pm.dispose(); if (old) old.dispose(); u.uK.value = 1; scene.add(dome);
+}
+
+/* ---------- Dungeons & Portale ---------- */
+function dungeon(d) {
+  const g = new T.Group(); scene.add(g); const fm = new T.MeshStandardMaterial({ map: TX.cobble, color: d.col, roughness: 0.92 }), ps = [], W = d.w;
+  const pillar = (x, z, tall, lit) => { const h = tall ? 9 : 4.6; ps.push(pc('cyl6', d.wall, [x, d.y + h / 2, z], [tall ? 2.6 : 1.5, h, tall ? 2.6 : 1.5], null, 'stone', { g: 0.35 }), pc('box', d.wall, [x, d.y + h + 0.2, z], [tall ? 3.4 : 2, 0.45, tall ? 3.4 : 2], null, 'stone'), pc('box', d.wall, [x, d.y + 0.25, z], [tall ? 3.4 : 2, 0.5, tall ? 3.4 : 2], null, 'stone')); if (lit) { ps.push(pc('oct', d.glow, [x, d.y + h + 1.5, z], [tall ? 1.3 : 0.75, tall ? 2.4 : 1.4, tall ? 1.3 : 0.75], null, 'glow', { top: 0xffffff })); const s = glow(d.glow, tall ? 11 : 6, 0.55); s.position.set(x, d.y + h + 1.5, z); g.add(s); } };
+  d.rooms.forEach((r, i) => {
+    const m = new T.Mesh(new T.CylinderGeometry(r.r, r.r - 3, 7, 44), fm); m.position.set(r.x, d.y - 3.5, r.z); m.receiveShadow = true; g.add(m); groundMeshes.push(m);
+    const under = new T.Mesh(new T.ConeGeometry(r.r - 3, r.r * 1.1, 12), M.stone); under.rotation.x = PI; under.position.set(r.x, d.y - 7 - r.r * 0.55, r.z); g.add(under);
+    const gaps = []; for (const j of [i - 1, i + 1]) if (d.rooms[j]) gaps.push(Math.atan2(d.rooms[j].z - r.z, d.rooms[j].x - r.x));
+    const n = Math.round(r.r * 1.15), open = Math.asin(Math.min(1, (W / 2 + 2.2) / r.r));
+    for (let k = 0; k < n; k++) { const a = k / n * PI * 2; if (gaps.some(q => Math.abs(Math.atan2(Math.sin(a - q), Math.cos(a - q))) < open)) continue; pillar(r.x + Math.cos(a) * (r.r - 1.3), r.z + Math.sin(a) * (r.r - 1.3), false, k % 3 === 0); }
+    if (i === d.rooms.length - 1) { for (let k = 0; k < 6; k++) { const a = k / 6 * PI * 2 + 0.5; pillar(r.x + Math.cos(a) * r.r * 0.62, r.z + Math.sin(a) * r.r * 0.62, true, true); } const ru = flat(TX.rune, d.glow, r.r * 1.5); ru.position.set(r.x, d.y + 0.12, r.z); ru.material.opacity = 0.6; g.add(ru); anims.push(t => { ru.rotation.z = t * 0.15; }); }
+  });
+  for (let i = 0; i < d.rooms.length - 1; i++) {
+    const a = d.rooms[i], b = d.rooms[i + 1], dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz), ry = Math.atan2(dx, dz), m = new T.Mesh(new T.BoxGeometry(W, 6, len), fm); m.position.set((a.x + b.x) / 2, d.y - 3, (a.z + b.z) / 2); m.rotation.y = ry; m.receiveShadow = true; g.add(m); groundMeshes.push(m);
+    const inner = len - a.r - b.r, cs = Math.cos(ry), sn = Math.sin(ry); for (const s of [-1, 1]) for (let k = 0; k <= Math.floor(inner / 5); k++) { const t = (a.r + 1 + k * 5) / len, x = a.x + dx * t + cs * s * (W / 2 - 0.4), z = a.z + dz * t - sn * s * (W / 2 - 0.4); ps.push(pc('box', d.wall, [x, d.y + 0.9, z], [0.9, 1.8, 0.9], [0, ry, 0], 'stone'), pc('box', d.wall, [x, d.y + 1.5, z], [0.5, 0.3, 5], [0, ry, 0], 'stone')); if (k % 2 === 0) ps.push(pc('oct', d.glow, [x, d.y + 2.3, z], [0.4, 0.7, 0.4], null, 'glow')); }
+  }
+  build(g, ps).forEach(m => { m.receiveShadow = true; });
+}
+function portal(color) {
+  const g = new T.Group(); build(g, [pc('cyl6', 0x8c8478, [-1.9, 2.4, 0], [1, 4.8, 1], null, 'stone', { g: 0.3 }), pc('cyl6', 0x8c8478, [1.9, 2.4, 0], [1, 4.8, 1], null, 'stone', { g: 0.3 }), pc('box', 0x9a948a, [0, 5.1, 0], [5.4, 0.8, 1.3], null, 'stone'), pc('box', 0x8c8478, [0, 0.2, 0], [5.6, 0.4, 2.2], null, 'stone'), pc('oct', color, [0, 6.1, 0], [0.7, 1.2, 0.7], null, 'glow', { top: 0xffffff }), pc('oct', color, [-1.9, 5.3, 0], [0.4, 0.7, 0.4], null, 'glow'), pc('oct', color, [1.9, 5.3, 0], [0.4, 0.7, 0.4], null, 'glow')]);
+  const mk = (map, s, op) => { const m = new T.Mesh(B.plane, new T.MeshBasicMaterial({ map, color, transparent: true, opacity: op, depthWrite: false, toneMapped: false, side: T.DoubleSide, blending: T.AdditiveBlending })); m.scale.setScalar(s); m.position.y = 2.6; g.add(m); return m; };
+  const a = mk(TX.rune, 4.6, 0.9), b = mk(TX.glow, 6.5, 0.8), s = glow(color, 9, 0.5); s.position.y = 2.6; g.add(s);
+  anims.push(t => { a.rotation.z = t * 0.9; b.scale.setScalar(6 + Math.sin(t * 3) * 0.6); if (Math.random() < 0.25 && camera.position.distanceToSquared(g.position) < 8000) pAdd.emit({ x: g.position.x + rnd(-1.4, 1.4), y: g.position.y + rnd(0.5, 4.5), z: g.position.z + rnd(-0.3, 0.3), vy: 1.2, life: 1.2, size: 0.45, c: color, c2: 0xffffff }); });
+  scene.add(g); return g;
 }
 
 /* ---------- Partikel ---------- */
@@ -445,6 +481,6 @@ function frame(dt, time, f, zone) {
   fpsT += dt; fpsN++; if (fpsT > 4) { const fps = fpsN / fpsT; fpsT = 0; fpsN = 0; if (fps < 22 && time > 8 && quality !== 'niedrig' && api.auto) { setQuality(quality === 'hoch' ? 'mittel' : 'niedrig'); if (api.onQuality) api.onQuality(quality); } }
 }
 
-const api = { init, frame, setQuality, fx, projectile, loot, selection, glow, pc, build, parts, mirror, xf, lathe, tube, tex, auto: true, get quality() { return quality; }, get scene() { return scene; }, get camera() { return camera; }, get renderer() { return renderer; }, groundMeshes, blockers, colliders, B, M, TX, particles: () => ({ add: pAdd, norm: pNorm }), T, lerp, clamp, rnd };
+const api = { init, frame, setQuality, setMood, dungeon, portal, fx, projectile, loot, selection, glow, pc, build, parts, mirror, xf, lathe, tube, tex, auto: true, get quality() { return quality; }, get scene() { return scene; }, get camera() { return camera; }, get renderer() { return renderer; }, groundMeshes, blockers, colliders, B, M, TX, particles: () => ({ add: pAdd, norm: pNorm }), T, lerp, clamp, rnd };
 return api;
 })();

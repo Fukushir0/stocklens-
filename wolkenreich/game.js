@@ -1,7 +1,7 @@
 'use strict';
 /* Wolkenreich – Engine */
 (() => {
-const { CLASSES, SPECS, SKILLS, RAR, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed } = WR;
+const { CLASSES, SPECS, SKILLS, RAR, SETS, DUNGEONS, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed } = WR;
 const $ = s => document.querySelector(s);
 const rnd = (a, b) => a + Math.random() * (b - a);
 const rint = (a, b) => Math.floor(rnd(a, b + 1));
@@ -19,7 +19,15 @@ function terrainH(x, z) {
   return h;
 }
 function islandAt(x, z) { for (const i of ISLANDS) if (Math.hypot(x - i.x, z - i.z) < i.r - 0.5) return i; return null; }
+// Dungeons liegen weit außerhalb der Karte; Boden = Räume (Kreise) + Gänge dazwischen
+const DUN = DUNGEONS.map((d, i) => { const ox = 3000 + i * 900, f = i % 2 ? -1 : 1; return Object.assign({ y: 30, w: 10, rooms: [[0, 0, 14], [0, 62, 22], [52 * f, 120, 22], [52 * f, 190, 24], [0, 256, 34]].map(r => ({ x: ox + r[0], z: r[1], r: r[2] })) }, d); });
+function dunFloor(d, x, z, pad = 0) {
+  for (const r of d.rooms) if (Math.hypot(x - r.x, z - r.z) < r.r - 1.6 - pad) return true;
+  for (let i = 0; i < d.rooms.length - 1; i++) { const a = d.rooms[i], b = d.rooms[i + 1], dx = b.x - a.x, dz = b.z - a.z, t = clamp(((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz), 0, 1); if (Math.hypot(x - a.x - dx * t, z - a.z - dz * t) < d.w / 2 - 0.9 - pad) return true; }
+  return false;
+}
 function groundAt(x, z, y) {
+  if (x > 2500) { for (const d of DUN) if (dunFloor(d, x, z, -2.5)) return d.y; return -40; }
   const g = terrainH(x, z), i = islandAt(x, z);
   return i && y >= i.y - 1.5 ? i.y : g;
 }
@@ -37,7 +45,7 @@ function runTimers(dt) { for (let i = timers.length - 1; i >= 0; i--) { timers[i
 
 /* ---------- Spielzustand ---------- */
 const p = {
-  name: 'Wanderer', hair: HAIRS[0], cls: 'wanderer', spec: null, lvl: 1, exp: 0, gold: 50, sp: 0,
+  name: 'Wanderer', hair: HAIRS[0], cls: 'wanderer', spec: null, dun: null, lvl: 1, exp: 0, gold: 50, sp: 0,
   stats: { str: 10, sta: 10, dex: 10, int: 10 }, inv: [], equip: { weapon: null, armor: null, board: null },
   q: { i: 0, on: false, prog: 0 }, hp: 1, mp: 1,
   x: 0, y: 2, z: 16, vy: 0, rot: Math.PI, onGround: true, flying: false, dead: false,
@@ -51,13 +59,18 @@ let started = false, shopOpen = false, curNpc = null, zoneName = '', zoneKey = '
 const mod = k => p.buffs.reduce((a, b) => a * (b.m[k] || 1), 1);
 const cls = () => CLASSES[p.cls];
 const clsName = () => p.spec ? SPECS[p.spec].name : cls().name;
-const maxHP = () => Math.round((90 + p.lvl * 20 + p.stats.sta * 10) * cls().hpM * (p.spec ? SPECS[p.spec].hpM : 1));
+const ARMOR = ['helm', 'armor', 'gloves', 'boots'], GEAR = ['weapon'].concat(ARMOR), SLOTN = { weapon: 'Waffe', helm: 'Helm', armor: 'Rüstung', gloves: 'Handschuhe', boots: 'Stiefel', board: 'Flugbrett' };
+// Set: alle vier Rüstungsteile im selben Seltenheitsgrad
+function setInfo() { const c = [0, 0, 0, 0, 0]; let n = 0; for (const k of ARMOR) if (p.equip[k]) { c[p.equip[k].r || 0]++; n++; } let best = 0; for (let i = 1; i < 5; i++) if (c[i] > c[best]) best = i; return { r: best, n: c[best], full: c[best] === 4 ? SETS[best] : null, any: n > 0 }; }
+const setB = (k, d) => { const f = setInfo().full; return f && f[k] !== undefined ? f[k] : d; };
+const wBonus = (k, d) => { const e = p.equip.weapon, b = e && ITEMS[e.id].bonus; return b && b[k] !== undefined ? b[k] : d; };
+const maxHP = () => Math.round((90 + p.lvl * 20 + p.stats.sta * 10) * cls().hpM * (p.spec ? SPECS[p.spec].hpM : 1) * wBonus('hp', 1) * setB('hp', 1));
 const maxMP = () => Math.round(30 + p.lvl * 6 + p.stats.int * 7);
 const eqVal = (slot, k) => { const e = p.equip[slot]; return e ? ITEMS[e.id][k] * RAR[e.r || 0].m * (1 + 0.08 * (e.plus || 0)) : 0; };
-const atkPower = () => (eqVal('weapon', 'atk') + p.stats[cls().stat] * 1.0 + p.lvl * 1.5) * mod('atk');
-const defense = () => (eqVal('armor', 'def') + p.stats.sta * 0.5) * mod('def');
-const critChance = () => Math.min(0.6, 0.05 + p.stats.dex * 0.003);
-const atkInterval = () => clamp(1.25 - p.stats.dex * 0.006, 0.5, 1.25) / mod('aspd');
+const atkPower = () => (eqVal('weapon', 'atk') + p.stats[cls().stat] * 1.0 + p.lvl * 1.5) * mod('atk') * wBonus('atk', 1) * setB('atk', 1);
+const defense = () => (ARMOR.reduce((a, k) => a + eqVal(k, 'def'), 0) + p.stats.sta * 0.5) * mod('def') * setB('def', 1);
+const critChance = () => Math.min(0.75, 0.05 + p.stats.dex * 0.003 + wBonus('crit', 0) + setB('crit', 0));
+const atkInterval = () => clamp(1.25 - p.stats.dex * 0.006, 0.5, 1.25) / mod('aspd') / wBonus('aspd', 1);
 const mySkills = () => Object.keys(SKILLS).filter(k => SKILLS[k].cls === '*' || SKILLS[k].cls === p.cls || SKILLS[k].cls === p.spec);
 
 /* ---------- Audio ---------- */
@@ -80,13 +93,15 @@ const v3 = new THREE.Vector3();
 function toScreen(x, y, z) { v3.set(x, y, z).project(camera); if (v3.z > 1 || v3.z < -1) return null; return { x: (v3.x * 0.5 + 0.5) * window.innerWidth, y: (-v3.y * 0.5 + 0.5) * window.innerHeight }; }
 function floatText(txt, x, y, z, c) { const s = toScreen(x, y, z); if (!s) return; const d = document.createElement('div'); d.className = 'dmg ' + (c || ''); d.textContent = txt; d.style.left = (s.x + rnd(-14, 14)) + 'px'; d.style.top = s.y + 'px'; $('#labels').appendChild(d); setTimeout(() => d.remove(), 900); }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const isGear = id => ITEMS[id].type === 'weapon' || ITEMS[id].type === 'armor';
+const isGear = id => GEAR.includes(ITEMS[id].type);
 const gearName = (id, r, plus) => `<span style="color:${isGear(id) ? RAR[r || 0].col : '#ffd978'}">${ITEMS[id].name}${plus ? ' +' + plus : ''}</span>`;
 function itemTip(id, plus, r) {
   const it = ITEMS[id], m = RAR[r || 0].m * (1 + 0.08 * (plus || 0)); let h = `<b>${it.icon} ${gearName(id, r, plus)}</b>`;
   if (isGear(id)) h += `<br><span style="color:${RAR[r || 0].col}">◆ ${RAR[r || 0].name}</span>${r ? ` (+${Math.round((RAR[r].m - 1) * 100)} %)` : ''}`;
   if (it.atk) h += `<br>Angriff: ${Math.round(it.atk * m)}`;
   if (it.def) h += `<br>Verteidigung: ${Math.round(it.def * m)}`;
+  if (it.bonus) { const b = it.bonus, L = []; if (b.atk) L.push(`+${Math.round((b.atk - 1) * 100)} % Angriff`); if (b.crit) L.push(`+${Math.round(b.crit * 100)} % kritische Treffer`); if (b.aspd) L.push(`+${Math.round((b.aspd - 1) * 100)} % Angriffstempo`); if (b.hp) L.push(`+${Math.round((b.hp - 1) * 100)} % Leben`); if (b.leech) L.push(`Heilt dich um ${Math.round(b.leech * 100)} % des verursachten Schadens`); h += `<br><span style="color:${RAR[it.fr].col}">${L.join('<br>')}</span>`; }
+  if (ARMOR.includes(it.type)) h += `<br><span class="muted">Set-Teil (${RAR[r || 0].name}): 4 Teile im selben Grad geben einen Bonus</span>`;
   if (it.hp) h += `<br>Stellt ${it.hp} Leben her`; if (it.mp) h += `<br>Stellt ${it.mp} Mana her`;
   if (it.speed) h += `<br>Fluggeschwindigkeit: ${it.speed}`;
   if (it.cls) h += `<br>Klasse: ${CLASSES[it.cls].name}`; if (it.lvl > 1) h += `<br>Ab Stufe ${it.lvl}`;
@@ -95,7 +110,7 @@ function itemTip(id, plus, r) {
 }
 const sellPrice = (id, r) => ITEMS[id].type === 'misc' ? ITEMS[id].price : Math.round(ITEMS[id].price * 0.4 * (isGear(id) ? RAR[r || 0].sell : 1));
 // Beste zur Klasse passende Waffe/Rüstung bis zu einer Stufe
-function gearFor(type, lvl) { let best = null; for (const id in ITEMS) { const it = ITEMS[id]; if (it.type === type && (!it.cls || it.cls === p.cls) && it.lvl <= lvl && (!best || it.lvl > ITEMS[best].lvl || (it.lvl === ITEMS[best].lvl && it.cls))) best = id; } return best; }
+function gearFor(type, lvl) { let best = null; for (const id in ITEMS) { const it = ITEMS[id]; if (it.type === type && !it.fr && (!it.cls || it.cls === p.cls) && it.lvl <= lvl && (!best || it.lvl > ITEMS[best].lvl || (it.lvl === ITEMS[best].lvl && it.cls))) best = id; } return best; }
 function rollRarity(boss) { if (boss) return Math.random() < 0.25 ? 4 : Math.random() < 0.5 ? 3 : 2; let t = Math.random() * 100; for (let i = 0; i < RAR.length; i++) { t -= RAR[i].w; if (t <= 0) return i; } return 0; }
 const tipEl = $('#tip');
 document.addEventListener('pointermove', e => {
@@ -106,7 +121,7 @@ document.addEventListener('pointermove', e => {
 });
 
 /* ---------- Inventar ---------- */
-const stackable = id => !['weapon', 'armor', 'board'].includes(ITEMS[id].type);
+const stackable = id => !isGear(id) && ITEMS[id].type !== 'board';
 const countItem = id => p.inv.reduce((a, s) => a + (s.id === id ? s.n : 0), 0);
 function addItem(id, n = 1, plus = 0, r = 0) {
   if (stackable(id)) { const s = p.inv.find(s => s.id === id); if (s) { s.n += n; renderInv(); return true; } }
@@ -139,7 +154,8 @@ const rarStyle = s => isGear(s.id) ? `border-color:${RAR[s.r || 0].col};box-shad
 function renderInv() {
   const b = $('#invBody'); if (!b || $('#winInv').classList.contains('hidden')) return;
   const eq = (slot, cap) => { const e = p.equip[slot]; return `<div><div class="cell" data-eq="${slot}" ${e ? `data-tip="${esc(itemTip(e.id, e.plus, e.r))}" style="${rarStyle(e)}"` : ''}>${e ? ITEMS[e.id].icon : ''}${e && e.plus ? `<span class="pl">+${e.plus}</span>` : ''}</div><div class="cap">${cap}</div></div>`; };
-  let h = `<div class="equip">${eq('weapon', 'Waffe')}${eq('armor', 'Rüstung')}${eq('board', 'Flugbrett')}</div>`;
+  const si = setInfo(); let h = `<div class="equip">${GEAR.concat('board').map(k => eq(k, SLOTN[k])).join('')}</div>`;
+  if (si.any) h += `<div style="margin-bottom:6px;color:${RAR[si.r].col}" data-tip="${esc('<b>' + SETS[si.r].name + '</b><br>' + SETS[si.r].text + '<br><span class=muted>Alle vier Rüstungsteile müssen denselben Seltenheitsgrad haben.</span>')}">◆ ${SETS[si.r].name} ${si.n}/4${si.full ? ' – aktiv: ' + si.full.text : ''}</div>`;
   h += `<div class="muted" style="margin-bottom:6px">${shopOpen ? '🛒 Laden offen: Klick = <b>verkaufen</b>' : 'Klick = benutzen / ausrüsten'}</div><div class="grid">`;
   for (let i = 0; i < 36; i++) { const s = p.inv[i]; h += s ? `<div class="cell" data-i="${i}" data-tip="${esc(itemTip(s.id, s.plus, s.r))}" style="${rarStyle(s)}">${ITEMS[s.id].icon}${s.n > 1 ? `<span class="n">${s.n}</span>` : ''}${s.plus ? `<span class="pl">+${s.plus}</span>` : ''}</div>` : '<div class="cell"></div>'; }
   b.innerHTML = h + `</div><div class="row" style="margin-top:8px"><span>💰 ${p.gold.toLocaleString('de-DE')} Taler</span><span class="muted">${p.inv.length}/36</span></div>`;
@@ -157,7 +173,7 @@ function renderChar() {
   const ST = { str: 'Erhöht den Angriff von Wanderern und Klingenkämpfern.', sta: 'Mehr Leben und Verteidigung.', dex: 'Angriffstempo und kritische Treffer. Hauptwert der Waldläufer.', int: 'Mehr Mana. Hauptwert von Arkanisten und Klerikern.' };
   let h = `<div class="row"><b>${esc(p.name)}</b><span>${clsName()} · Stufe ${p.lvl}</span></div><h4>Attribute ${p.sp ? `<span style="color:#7dffb0">(${p.sp} Punkte frei)</span>` : ''}</h4>`;
   for (const k in SN) h += `<div class="row" data-tip="${ST[k]}"><span>${SN[k]}${cls().stat === k ? ' ★' : ''}</span><span>${p.stats[k]} ${p.sp ? `<button data-st="${k}">+</button>` : ''}</span></div>`;
-  h += `<h4>Kampfwerte</h4><div class="row"><span>Angriff</span><span>${Math.round(atkPower())}</span></div><div class="row"><span>Verteidigung</span><span>${Math.round(defense())}</span></div><div class="row"><span>Kritische Treffer</span><span>${Math.round(critChance() * 100)} %</span></div><div class="row"><span>Angriffe pro Sekunde</span><span>${(1 / atkInterval()).toFixed(2)}</span></div><h4>Fertigkeiten</h4>`;
+  h += `${setInfo().full ? `<div style="color:${RAR[setInfo().r].col}">◆ ${setInfo().full.name} aktiv: ${setInfo().full.text}</div>` : ''}<h4>Kampfwerte</h4><div class="row"><span>Angriff</span><span>${Math.round(atkPower())}</span></div><div class="row"><span>Verteidigung</span><span>${Math.round(defense())}</span></div><div class="row"><span>Kritische Treffer</span><span>${Math.round(critChance() * 100)} %</span></div><div class="row"><span>Angriffe pro Sekunde</span><span>${(1 / atkInterval()).toFixed(2)}</span></div><h4>Fertigkeiten</h4>`;
   for (const k of mySkills()) { const s = SKILLS[k], ok = p.lvl >= s.lvl; h += `<div class="row" style="${ok ? '' : 'opacity:.5'}"><span>${s.icon} <b>${s.name}</b><br><span class="muted">${s.desc} · ${s.mp} MP</span></span><span>${ok ? '✔' : 'St. ' + s.lvl}</span></div>`; }
   if (p.cls === 'wanderer') h += `<div class="muted" style="margin-top:6px">Ab Stufe 10 kannst du bei Meisterin Kaela eine Klasse wählen.</div>`;
   else if (!p.spec) h += `<div class="muted" style="margin-top:6px">Ab Stufe 60 bietet dir Meisterin Kaela eine zweite Klassenstufe mit drei neuen Fertigkeiten.</div>`;
@@ -184,7 +200,24 @@ function shopHtml(ids) {
   return ids.map(id => { const it = ITEMS[id]; return `<div class="shoprow" data-tip="${esc(itemTip(id))}"><span class="ic">${it.icon}</span><span class="nm">${it.name}<small>${it.atk ? 'Angriff ' + it.atk : it.def ? 'Verteidigung ' + it.def : it.hp ? '+' + it.hp + ' Leben' : it.mp ? '+' + it.mp + ' Mana' : 'Tempo ' + it.speed}${it.lvl > 1 ? ' · St. ' + it.lvl : ''}</small></span><button data-buy="${id}" ${p.gold < it.price ? 'disabled' : ''}>${it.price.toLocaleString('de-DE')} 💰</button></div>`; }).join('');
 }
 function upgradeInfo(slot) { const e = p.equip[slot]; if (!e) return null; const pl = e.plus || 0; return { e, pl, cost: Math.round(ITEMS[e.id].price * 0.15 * (pl + 1)) + 50, chance: Math.max(0.25, 1 - pl * 0.09), stones: 1 + Math.floor(pl / 4) }; }
+const portals = [];
+function buildDungeons() {
+  const mk = (x, y, z, col, name, sub, o) => { const g = GFX.portal(col); g.position.set(x, y, z); g.rotation.y = o.ry || 0; const q = Object.assign({ portal: true, x, y, z, name, role: sub }, o); q.pick = addPick(g, 2.6, 4.6, 5.4, q, 'npc'); const l = document.createElement('div'); l.className = 'lbl'; l.innerHTML = `${name}<small>${sub}</small>`; $('#labels').appendChild(l); q.lbl = l; portals.push(q); return q; };
+  DUN.forEach((d, i) => {
+    GFX.dungeon(d); const a = 0.98 + i * Math.PI / 2, x = Math.cos(a) * 58, z = Math.sin(a) * 58; d.px = x; d.pz = z;
+    mk(x, terrainH(x, z), z, d.glow, d.name, `Dungeon · Stufe ${d.lvl}–${d.max}`, { enter: d, ry: Math.atan2(-x, -z) });
+    const r0 = d.rooms[0], rb = d.rooms[4]; mk(r0.x, d.y, r0.z - 9, 0x9ff0ff, 'Ausgang', 'zurück nach Luminhafen', { exit: d }); mk(rb.x, d.y, rb.z + 27, 0x9ff0ff, 'Ausgang', 'zurück nach Luminhafen', { exit: d });
+    d.mobs.forEach((id, k) => { const r = d.rooms[k + 1]; for (let n = 0; n < 6; n++) spawnMob(id, { x: r.x, z: r.z, r: r.r - 3, y: d.y, isl: true }); });
+    spawnMob(d.boss, { x: rb.x, z: rb.z, r: rb.r - 3, y: d.y, isl: true });
+  });
+}
+function usePortal(q) {
+  if (q.enter) { const d = q.enter; if (p.lvl < d.lvl) return log(`${d.name}: Du brauchst mindestens Stufe ${d.lvl}.`, 'r'); p.dun = d; p.flying = false; p.x = d.rooms[0].x; p.z = d.rooms[0].z + 3; p.y = d.y; p.rot = 0; cam.yaw = Math.PI; GFX.setMood(d.mood); log(`Du betrittst: ${d.name}. Am Ende wartet ${MOBS[d.boss].name}.`, 'g'); }
+  else { const d = q.exit; p.dun = null; p.x = d.px * 0.86; p.z = d.pz * 0.86; p.y = terrainH(p.x, p.z); GFX.setMood(null); for (const m of mobs) if (m.state === 'chase') m.state = 'return'; }
+  p.vy = 0; p.moveTo = null; p.attacking = false; setTarget(null); ring(p.x, p.y, p.z, 0x9ff0ff, 6); beep(520, 0.4, 'sine', 0.06, 400); zoneName = ''; hudT = 0; save();
+}
 function openNpc(n) {
+  if (n.portal) return usePortal(n);
   curNpc = n; shopOpen = n.id === 'tessa' || n.id === 'ivo'; $('#npcTitle').textContent = `${n.name} – ${n.role}`; let h = '';
   if (n.id === 'mira') {
     const q = curQuest();
@@ -193,13 +226,13 @@ function openNpc(n) {
     else if (questDone()) h = `<h4>${q.name}</h4>Wunderbar! Du hast es geschafft. Hier ist deine Belohnung:<br><b>${rewardText(q)}</b><div class="npcbtns"><button data-act="finish">Quest abschließen</button></div>`;
     else h = `<h4>${q.name}</h4>${q.text}<h4>Fortschritt</h4>${questGoal(q)}: <b>${questProg()} / ${q.n}</b>`;
   } else if (n.id === 'tessa') {
-    const ids = Object.keys(ITEMS).filter(id => { const it = ITEMS[id]; return it.type === 'use' || ((it.type === 'weapon' || it.type === 'armor') && (!it.cls || it.cls === p.cls) && it.lvl <= p.lvl + 9); });
+    const ids = Object.keys(ITEMS).filter(id => { const it = ITEMS[id]; return it.type === 'use' || (isGear(id) && !it.fr && (!it.cls || it.cls === p.cls) && it.lvl <= p.lvl + 9 && it.lvl >= p.lvl - 16); });
     h = `Willkommen! Sieh dich um. <span class="muted">(Zum Verkaufen im Inventar auf einen Gegenstand klicken.)</span><div style="margin-top:8px">${shopHtml(ids)}</div>`;
   } else if (n.id === 'ivo') {
     h = `Der Himmel ruft! Rüste ein Flugbrett aus und drücke <b>F</b>, um abzuheben. <b>Leertaste</b> steigt, <b>X</b> sinkt. Die Himmelsinseln liegen im Südosten.<div style="margin-top:8px">${shopHtml(['brett1', 'brett2'])}</div>`;
   } else if (n.id === 'borin') {
     h = `Ich mache deine Ausrüstung stärker – jede Stufe bringt <b>+8 %</b>. Dafür brauche ich Sternsplitter 💎 (du hast ${countItem('splitter')}) und Taler. Wenn es misslingt, sind nur die Materialien weg.`;
-    for (const [slot, nm] of [['weapon', 'Waffe'], ['armor', 'Rüstung']]) { const u = upgradeInfo(slot); h += `<div class="shoprow"><span class="ic">${u ? ITEMS[u.e.id].icon : '–'}</span><span class="nm">${u ? ITEMS[u.e.id].name + ' +' + u.pl : nm + ': nichts ausgerüstet'}${u && u.pl < 10 ? `<small>→ +${u.pl + 1} · Chance ${Math.round(u.chance * 100)} % · ${u.stones} 💎 + ${u.cost.toLocaleString('de-DE')} Taler</small>` : u ? '<small>Maximal verbessert</small>' : ''}</span>${u && u.pl < 10 ? `<button data-up="${slot}" ${p.gold < u.cost || countItem('splitter') < u.stones ? 'disabled' : ''}>Verbessern</button>` : ''}</div>`; }
+    for (const slot of GEAR) { const nm = SLOTN[slot]; const u = upgradeInfo(slot); h += `<div class="shoprow"><span class="ic">${u ? ITEMS[u.e.id].icon : '–'}</span><span class="nm">${u ? ITEMS[u.e.id].name + ' +' + u.pl : nm + ': nichts ausgerüstet'}${u && u.pl < 10 ? `<small>→ +${u.pl + 1} · Chance ${Math.round(u.chance * 100)} % · ${u.stones} 💎 + ${u.cost.toLocaleString('de-DE')} Taler</small>` : u ? '<small>Maximal verbessert</small>' : ''}</span>${u && u.pl < 10 ? `<button data-up="${slot}" ${p.gold < u.cost || countItem('splitter') < u.stones ? 'disabled' : ''}>Verbessern</button>` : ''}</div>`; }
   } else if (n.id === 'kaela') {
     const reset = `<br><br>Für ${(p.lvl * 60).toLocaleString('de-DE')} Taler setze ich deine Attributpunkte zurück.<div class="npcbtns"><button data-act="reset" ${p.gold < p.lvl * 60 ? 'disabled' : ''}>Attribute zurücksetzen</button></div>`;
     if (p.cls === 'wanderer') {
@@ -250,7 +283,7 @@ const HELP = `<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> laufen · <b>Klic
 <kbd>2</kbd>–<kbd>8</kbd> Fertigkeiten · <kbd>9</kbd> Heiltrank · <kbd>0</kbd> Manatrank<br>
 <kbd>F</kbd> fliegen (Flugbrett nötig) – <kbd>Leertaste</kbd> steigen, <kbd>X</kbd> sinken<br>
 <kbd>C</kbd> Charakter · <kbd>I</kbd> Inventar · <kbd>L</kbd> Quests · <kbd>H</kbd> Hilfe · <kbd>Esc</kbd> schließen<br>
-<b>Klick auf Dorfbewohner</b> zum Reden. Der Spielstand wird automatisch gespeichert.<br>
+<b>Klick auf Dorfbewohner</b> zum Reden. Die vier <b>Dungeon-Portale</b> stehen rund ums Dorf (hellblaue Punkte auf der Karte). Der Spielstand wird automatisch gespeichert.<br>
 <span class="gfxrow">Grafik: <button data-q="hoch">Hoch</button> <button data-q="mittel">Mittel</button> <button data-q="niedrig">Niedrig</button></span>`;
 document.querySelectorAll('.helpBody').forEach(e => e.innerHTML = HELP);
 const markQ = () => document.querySelectorAll('[data-q]').forEach(b => { b.style.outline = b.dataset.q === GFX.quality ? '2px solid #fff' : 'none'; });
@@ -291,6 +324,7 @@ function hitMob(m, mult, o = {}) {
   if (m.dead) return; const r = calcDmg(mult, m); m.hp -= r.d; m.hitT = 0.15; p.combatT = 6;
   floatText(r.d + (r.crit ? '!' : ''), m.x, mobCenterY(m) + 1.2 * m.def.scale, m.z, r.crit ? 'crit' : ''); fx.hit(m.x, mobCenterY(m), m.z, o.color || 0xffffff, Math.min(2.2, m.def.scale));
   beep(r.crit ? 320 : 220, 0.06, 'square', 0.035, -90);
+  const lc = wBonus('leech', 0); if (lc && !p.dead) p.hp = Math.min(maxHP(), p.hp + r.d * lc);
   if (o.stun) m.stun = o.stun; if (o.slow) m.slow = o.slow;
   if (m.state !== 'chase') m.state = 'chase';
   if (m.hp <= 0) killMob(m);
@@ -345,16 +379,19 @@ function gainExp(n) {
   if (up) { p.hp = maxHP(); p.mp = maxMP(); levelFx(); center(`Stufe ${p.lvl}!`, '+3 Attributpunkte (C)'); log(`Stufenaufstieg! Du bist jetzt Stufe ${p.lvl}.`, 'g'); if (p.lvl === 10 && p.cls === 'wanderer') log('Meisterin Kaela im Dorf kann dir jetzt eine Klasse geben!', 'g'); if (p.lvl >= 60 && !p.spec && p.cls !== 'wanderer') log('Stufe 60! Meisterin Kaela bietet dir eine zweite Klassenstufe an.', 'g'); buildHotbar(); renderChar(); renderQuests(); save(); }
 }
 function killMob(m) {
-  m.dead = true; m.g.visible = false; m.respawn = m.def.boss ? 150 : rnd(9, 14); if (p.target === m) setTarget(null);
+  m.dead = true; m.g.visible = false; m.respawn = m.def.boss ? 150 : m.def.elite ? rnd(40, 55) : rnd(9, 14); if (p.target === m) setTarget(null);
   fx.kill(m.x, mobCenterY(m), m.z, m.def.color, Math.min(2.6, m.def.scale)); beep(140, 0.18, 'sawtooth', 0.05, -80);
   const diff = p.lvl - m.def.lvl; gainExp(Math.max(1, Math.round(m.def.exp * clamp(1 - (diff - 3) * 0.15, 0.1, 1))));
   dropLoot(m, { gold: rint(m.def.gold[0], m.def.gold[1]) });
   if (Math.random() < (m.def.boss ? 1 : 0.45)) dropLoot(m, { item: m.def.drop });
   if (Math.random() < (m.def.boss ? 1 : 0.025 + m.def.lvl * 0.002)) dropLoot(m, { item: 'splitter', n: m.def.boss ? 3 : 1 });
   if (Math.random() < 0.08) dropLoot(m, { item: m.def.lvl >= 70 ? 'hp4' : m.def.lvl >= 40 ? 'hp3' : m.def.lvl >= 15 ? 'hp2' : 'hp1' });
-  for (let i = 0, n = m.def.boss ? 2 : Math.random() < 0.07 ? 1 : 0; i < n; i++) { const id = gearFor(m.def.boss ? (i ? 'armor' : 'weapon') : Math.random() < 0.5 ? 'weapon' : 'armor', m.def.lvl + 2); if (id) dropLoot(m, { item: id, r: rollRarity(m.def.boss) }); }
+  for (let i = 0, n = m.def.boss ? 3 : Math.random() < (m.def.elite ? 0.16 : 0.07) ? 1 : 0; i < n; i++) { const id = gearFor(GEAR[Math.floor(Math.random() * GEAR.length)], m.def.lvl + 2); if (id) dropLoot(m, { item: id, r: m.def.boss ? rollRarity(true) : Math.max(m.def.elite && Math.random() < 0.4 ? 1 : 0, rollRarity(false)) }); }
+  // Legendäre (Boss ab Stufe 60) und blutige Waffen (Boss ab Stufe 80): extrem selten
+  if (m.def.boss && p.cls !== 'wanderer') { const special = pre => { let best = null; for (const id in ITEMS) { const it = ITEMS[id]; if (id.startsWith(pre + p.cls) && it.lvl <= m.def.lvl && (!best || it.lvl > ITEMS[best].lvl)) best = id; } return best; };
+    const q = Math.random() / (WRGAME.luck || 1), id = m.def.lvl >= 80 && q < 0.025 ? special('b_') : m.def.lvl >= 60 && q < 0.075 ? special('l_') : null; if (id) dropLoot(m, { item: id, r: ITEMS[id].fr }); }
   const q = curQuest(); if (q && p.q.on && q.kill === m.def.id && p.q.prog < q.n) { p.q.prog++; log(`${q.name}: ${p.q.prog} / ${q.n}`, 'e'); if (p.q.prog >= q.n) { log('Quest erfüllt! Kehre zu Mira zurück.', 'g'); beep(784, 0.2, 'triangle', 0.05); } renderQuests(); }
-  if (m.def.boss) center(m.def.name + ' bezwungen!', m.def.id === 'koloss' ? 'Die Himmelsinseln sind frei.' : 'Du bist die Legende von Wolkenreich.');
+  if (m.def.boss) center(m.def.name + ' bezwungen!', m.def.id === 'koloss' ? 'Die Himmelsinseln sind frei.' : p.dun ? 'Das Portal hinter dem Thron führt zurück.' : 'Du bist die Legende von Wolkenreich.');
 }
 function dropLoot(m, o) {
   const g = GFX.loot(!!o.gold, o.r !== undefined ? RAR[o.r].hex : undefined);
@@ -369,10 +406,11 @@ function hurtPlayer(m) {
 function die() {
   p.hp = 0; p.dead = true; p.flying = false; p.attacking = false; p.moveTo = null; setTarget(null);
   const loss = Math.floor(p.exp * 0.05); p.exp -= loss; center('Du wurdest besiegt', 'Du erwachst gleich im Dorf …'); log(`Du wurdest besiegt und verlierst ${loss} EP.`, 'r');
-  setTimeout(() => { p.dead = false; p.x = 0; p.z = 16; p.y = terrainH(0, 16); p.vy = 0; p.hp = Math.round(maxHP() * 0.5); p.mp = Math.round(maxMP() * 0.5); p.buffs = []; for (const m of mobs) if (m.state === 'chase') m.state = 'return'; save(); }, 3500);
+  setTimeout(() => { p.dead = false; if (p.dun) { p.dun = null; GFX.setMood(null); } p.x = 0; p.z = 16; p.y = terrainH(0, 16); p.vy = 0; p.hp = Math.round(maxHP() * 0.5); p.mp = Math.round(maxMP() * 0.5); p.buffs = []; for (const m of mobs) if (m.state === 'chase') m.state = 'return'; save(); }, 3500);
 }
 function toggleFly() {
   if (p.dead) return; if (p.flying) { p.flying = false; p.vy = 0; return; }
+  if (p.dun) return log('In Dungeons kannst du nicht fliegen.', 'r');
   const b = p.equip.board; if (!b) return log('Du brauchst ein Flugbrett. Frag Flugmeister Ivo im Dorf!', 'r');
   p.flying = true; p.attacking = false; p.queued = null; p.y += 1.2; p.vy = 0; ring(p.x, p.y - 1, p.z, 0x9fe8ff, 5); beep(300, 0.3, 'sine', 0.05, 500);
 }
@@ -464,9 +502,9 @@ function updatePlayer(dt) {
 
   const ml = Math.hypot(mx, mz); let moving = false;
   if (ml > 0.01) {
-    const board = p.equip.board && ITEMS[p.equip.board.id], spd = p.flying ? board.speed : 9 * mod('spd'), st = spd * dt;
-    let nx = p.x + mx / ml * st, nz = p.z + mz / ml * st; const dd = Math.hypot(nx, nz); if (dd > 470) { nx *= 470 / dd; nz *= 470 / dd; }
-    const blocked = !p.flying && !islandAt(nx, nz) && terrainH(nx, nz) < WATER - 0.5 && p.y < 20;
+    const board = p.equip.board && ITEMS[p.equip.board.id], spd = p.flying ? board.speed : 9 * mod('spd') * setB('spd', 1), st = spd * dt;
+    let nx = p.x + mx / ml * st, nz = p.z + mz / ml * st; const dd = Math.hypot(nx, nz); if (dd > 470 && !p.dun) { nx *= 470 / dd; nz *= 470 / dd; }
+    const blocked = p.dun ? !dunFloor(p.dun, nx, nz) : !p.flying && !islandAt(nx, nz) && terrainH(nx, nz) < WATER - 0.5 && p.y < 20;
     if (!p.flying || p.y < 14) for (const c of GFX.colliders) { const cd = Math.hypot(nx - c.x, nz - c.z); if (cd < c.r) { nx = c.x + (nx - c.x) / cd * c.r; nz = c.z + (nz - c.z) / cd * c.r; } }
     if (!blocked) { p.x = nx; p.z = nz; moving = true; } else p.moveTo = null;
     let dr = Math.atan2(mx, mz) - p.rot; dr = Math.atan2(Math.sin(dr), Math.cos(dr)); p.rot += dr * Math.min(1, dt * 14);
@@ -485,6 +523,7 @@ function updatePlayer(dt) {
   const h = p.model; h.g.position.set(p.x, p.y, p.z); h.g.rotation.y = p.rot;
   h.update(dt, { moving, flying: p.flying, air: !p.onGround && !p.flying, speed: mod('spd') });
   if (moving && !p.flying && p.onGround && Math.random() < dt * 10) fx.dust(p.x, p.y, p.z);
+  const wf = p.equip.weapon && ITEMS[p.equip.weapon.id].fr; if (wf && Math.random() < dt * 16) { h.handPos(tmpV); GFX.particles().add.emit({ x: tmpV.x, y: tmpV.y + 0.6, z: tmpV.z, spread: 0.35, vy: wf === 6 ? -1.4 : 1.4, life: 0.7, size: 0.42, c: RAR[wf].hex, c2: wf === 6 ? 0x400008 : 0xffffff }); }
   if (p.flying && Math.random() < dt * 40) fx.board(p.x - Math.sin(p.rot) * 1.3, p.y - 0.1, p.z - Math.cos(p.rot) * 1.3, h.boardC);
   if (curNpc && Math.hypot(curNpc.x - p.x, curNpc.z - p.z) > 12) showWin('winNpc', false);
 }
@@ -496,7 +535,7 @@ function updateLoot(dt) {
       const st = Math.min(d, 22 * dt); l.x += dx / d * st; l.z += dz / d * st; l.y += dy / d * st;
       if (d < 1.2) {
         if (l.gold) { p.gold += l.gold; log(`+${l.gold} Taler`, 'g'); beep(1200, 0.05, 'square', 0.025); gone = true; }
-        else if (addItem(l.item, l.n, 0, l.r || 0)) { log(`Erhalten: ${ITEMS[l.item].name}${l.n > 1 ? ' x' + l.n : ''}${l.r !== undefined ? ' (' + RAR[l.r].name + ')' : ''}`, l.r >= 2 ? 'g' : 'p'); if (l.r >= 3) { center(RAR[l.r].name + '-Fund!', ITEMS[l.item].name); beep(988, 0.3, 'triangle', 0.06, 500); } beep(900, 0.07, 'triangle', 0.04); gone = true; renderQuests(); const q = curQuest(); if (q && p.q.on && q.collect === l.item && countItem(l.item) === q.n) log('Quest erfüllt! Kehre zu Mira zurück.', 'g'); }
+        else if (addItem(l.item, l.n, 0, l.r || 0)) { log(`Erhalten: ${ITEMS[l.item].name}${l.n > 1 ? ' x' + l.n : ''}${l.r !== undefined ? ' (' + RAR[l.r].name + ')' : ''}`, l.r >= 2 ? 'g' : 'p'); if (l.r >= 3) { center(l.r >= 5 ? RAR[l.r].name + 'e Waffe!' : RAR[l.r].name + '-Fund!', ITEMS[l.item].name); if (l.r >= 5) levelFx(); beep(988, 0.3, 'triangle', 0.06, 500); } beep(900, 0.07, 'triangle', 0.04); gone = true; renderQuests(); const q = curQuest(); if (q && p.q.on && q.collect === l.item && countItem(l.item) === q.n) log('Quest erfüllt! Kehre zu Mira zurück.', 'g'); }
         else l.wait = l.t + 5;
       }
     }
@@ -526,25 +565,28 @@ function updateHud(dt) {
     $('#gold').textContent = `💰 ${p.gold.toLocaleString('de-DE')} Taler`;
     $('#buffs').innerHTML = p.buffs.map(b => `<span>${b.icon} ${Math.ceil(b.t)}s</span>`).join('') + (p.sp ? '<span style="color:#7dffb0">▲ Punkte frei (C)</span>' : '');
     let zn = 'Wildnis'; const d0 = Math.hypot(p.x, p.z), isl = islandAt(p.x, p.z);
-    if (isl && p.y > isl.y - 2) zn = isl.name || 'Himmelsinseln'; else if (d0 < 45) zn = 'Luminhafen'; else for (const z of ZONES) if (Math.hypot(p.x - z.x, p.z - z.z) < z.r * 1.1) zn = z.name;
-    if (zn !== zoneName) { zoneName = zn; const zz = ZONES.find(q => q.name === zn); zoneKey = zz ? zz.id : zn === 'Luminhafen' ? 'town' : isl ? 'isl' : ''; $('#zone').textContent = zn; if (zn !== 'Wildnis') { const z = ZONES.find(q => q.name === zn); center(zn, z ? `Monster ab Stufe ${MOBS[z.mobs[0][0]].lvl}` : isl ? `Monster ab Stufe ${MOBS[isl.mobs[0][0]].lvl}` : 'Sicheres Dorf'); } }
+    if (p.dun) zn = p.dun.name; else if (isl && p.y > isl.y - 2) zn = isl.name || 'Himmelsinseln'; else if (d0 < 45) zn = 'Luminhafen'; else for (const z of ZONES) if (Math.hypot(p.x - z.x, p.z - z.z) < z.r * 1.1) zn = z.name;
+    if (zn !== zoneName) { zoneName = zn; const zz = ZONES.find(q => q.name === zn); zoneKey = p.dun ? p.dun.amb : zz ? zz.id : zn === 'Luminhafen' ? 'town' : isl ? 'isl' : ''; $('#zone').textContent = zn; if (zn !== 'Wildnis') { const z = ZONES.find(q => q.name === zn); center(zn, z ? `Monster ab Stufe ${MOBS[z.mobs[0][0]].lvl}` : p.dun ? `Dungeon · Stufe ${p.dun.lvl}–${p.dun.max}` : isl ? `Monster ab Stufe ${MOBS[isl.mobs[0][0]].lvl}` : 'Sicheres Dorf'); } }
     for (const n of npcs) { const mk = npcMark(n), html = `${mk ? `<span class="qm">${mk}</span>` : ''}${n.name}<small>${n.role}</small>`; if (n._h !== html) { n._h = html; n.lbl.innerHTML = html; } }
   }
+  for (const n of portals) { const s = Math.hypot(n.x - p.x, n.z - p.z) < 110 ? toScreen(n.x, n.y + 7.6, n.z) : null; if (s) { n.lbl.style.display = ''; n.lbl.style.left = s.x + 'px'; n.lbl.style.top = s.y + 'px'; } else n.lbl.style.display = 'none'; }
   for (const n of npcs) { const s = Math.hypot(n.x - p.x, n.z - p.z) < 90 ? toScreen(n.x, n.y + 4.0, n.z) : null; if (s) { n.lbl.style.display = ''; n.lbl.style.left = s.x + 'px'; n.lbl.style.top = s.y + 'px'; } else n.lbl.style.display = 'none'; }
   mapT -= dt; if (mapT <= 0) { mapT = 0.12; drawMap(); }
 }
 const mctx = $('#minimap').getContext('2d');
 function drawMap() {
   const c = mctx, S = 160, R = 130, k = S / 2 / R; c.clearRect(0, 0, S, S); c.save(); c.beginPath(); c.arc(80, 80, 80, 0, 7); c.clip();
-  c.fillStyle = '#3f8f4a'; c.fillRect(0, 0, S, S);
+  c.fillStyle = p.dun ? '#10121c' : '#3f8f4a'; c.fillRect(0, 0, S, S);
   const P = (x, z) => [80 + (x - p.x) * k, 80 + (z - p.z) * k];
   const circ = (x, z, r, col) => { const q = P(x, z); c.fillStyle = col; c.beginPath(); c.arc(q[0], q[1], r * k, 0, 7); c.fill(); };
-  for (const z of ZONES) circ(z.x, z.z, z.r, `rgba(${z.col.map(v => Math.round(v * 255)).join(',')},.75)`);
-  circ(0, 0, 34, 'rgba(230,205,150,.9)'); for (const i of ISLANDS) circ(i.x, i.z, i.r, 'rgba(200,235,255,.75)');
+  if (p.dun) { const d = p.dun; c.strokeStyle = '#5a6078'; c.lineWidth = d.w * k; c.beginPath(); d.rooms.forEach((r, i) => { const q = P(r.x, r.z); i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]); }); c.stroke(); for (const r of d.rooms) circ(r.x, r.z, r.r, '#5a6078'); }
+  else for (const z of ZONES) circ(z.x, z.z, z.r, `rgba(${z.col.map(v => Math.round(v * 255)).join(',')},.75)`);
+  if (!p.dun) { circ(0, 0, 34, 'rgba(230,205,150,.9)'); for (const i of ISLANDS) circ(i.x, i.z, i.r, 'rgba(200,235,255,.75)'); }
+  for (const n of portals) { const q = P(n.x, n.z); c.fillStyle = '#7ff0ff'; c.beginPath(); c.arc(q[0], q[1], 3.5, 0, 7); c.fill(); }
   for (const m of mobs) { if (m.dead) continue; const q = P(m.x, m.z); if (Math.abs(q[0] - 80) > 82 || Math.abs(q[1] - 80) > 82) continue; c.fillStyle = m === p.target ? '#fff' : m.def.boss ? '#ff3ad6' : m.def.aggro ? '#ff4a4a' : '#ffb04a'; c.fillRect(q[0] - 1.5, q[1] - 1.5, m.def.boss ? 6 : 3, m.def.boss ? 6 : 3); }
   for (const n of npcs) { const q = P(n.x, n.z); c.fillStyle = '#ffe04a'; c.beginPath(); c.arc(q[0], q[1], 3, 0, 7); c.fill(); }
   // Richtung zum Dorf, wenn außerhalb
-  const d0 = Math.hypot(p.x, p.z); if (d0 > R) { const a = Math.atan2(-p.z, -p.x); c.fillStyle = '#ffe04a'; c.beginPath(); c.arc(80 + Math.cos(a) * 72, 80 + Math.sin(a) * 72, 4, 0, 7); c.fill(); }
+  const d0 = Math.hypot(p.x, p.z); if (d0 > R && !p.dun) { const a = Math.atan2(-p.z, -p.x); c.fillStyle = '#ffe04a'; c.beginPath(); c.arc(80 + Math.cos(a) * 72, 80 + Math.sin(a) * 72, 4, 0, 7); c.fill(); }
   c.translate(80, 80); c.rotate(-p.rot + Math.PI); c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.beginPath(); c.moveTo(0, -7); c.lineTo(5, 6); c.lineTo(0, 3); c.lineTo(-5, 6); c.closePath(); c.fill(); c.stroke(); c.restore();
   c.fillStyle = '#fff'; c.font = 'bold 10px sans-serif'; c.fillText('N', 76, 11);
 }
@@ -564,7 +606,7 @@ canvas.addEventListener('wheel', e => { cam.dist = clamp(cam.dist * (e.deltaY > 
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 function clickWorld(cx, cy) {
   if (p.dead) return; ndc.set(cx / window.innerWidth * 2 - 1, -(cy / window.innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera);
-  const picks = []; for (const m of mobs) if (!m.dead && Math.hypot(m.x - p.x, m.z - p.z) < 120) picks.push(m.pick); for (const n of npcs) picks.push(n.pick);
+  const picks = []; for (const m of mobs) if (!m.dead && Math.hypot(m.x - p.x, m.z - p.z) < 120) picks.push(m.pick); for (const n of npcs) picks.push(n.pick); for (const n of portals) if (Math.hypot(n.x - p.x, n.z - p.z) < 150) picks.push(n.pick);
   const hit = ray.intersectObjects(picks, false)[0];
   if (hit) { const u = hit.object.userData; if (u.kind === 'mob') { if (p.target === u.ent) startAttack(); else { setTarget(u.ent); beep(500, 0.03, 'sine', 0.03); } } else { p.interact = u.ent; p.attacking = false; p.moveTo = null; } return; }
   const gh = ray.intersectObjects(groundMeshes, false)[0];
@@ -592,7 +634,7 @@ setInterval(save, 15000); window.addEventListener('beforeunload', save);
 
 /* ---------- Start ---------- */
 function startGame(s) {
-  if (s) { Object.assign(p, s); p.inv = (s.inv || []).filter(i => ITEMS[i.id]); for (const k in p.equip) if (p.equip[k] && !ITEMS[p.equip[k].id]) p.equip[k] = null; if (p.flying || islandAt(p.x, p.z)) p.y = Math.max(p.y, groundAt(p.x, p.z, p.y)); else p.y = terrainH(p.x, p.z); }
+  if (s) { Object.assign(p, s); p.dun = null; if (p.x > 2000) { p.x = 0; p.z = 16; } p.inv = (s.inv || []).filter(i => ITEMS[i.id]); for (const k in p.equip) if (p.equip[k] && !ITEMS[p.equip[k].id]) p.equip[k] = null; if (p.flying || islandAt(p.x, p.z)) p.y = Math.max(p.y, groundAt(p.x, p.z, p.y)); else p.y = terrainH(p.x, p.z); }
   else { p.name = ($('#nameInput').value.trim() || 'Wanderer').slice(0, 14); p.equip.weapon = { id: 'w_holz', plus: 0 }; p.equip.armor = { id: 'a_0', plus: 0 }; p.inv = [{ id: 'apfel', n: 5 }]; p.hp = maxHP(); p.mp = maxMP(); p.y = terrainH(p.x, p.z); }
   p.flying = false; refreshModel(); buildHotbar(); started = true; cam.yaw = 0;
   $('#start').classList.add('hidden'); $('#hud').classList.remove('hidden');
@@ -607,7 +649,7 @@ let newArmed = !saved;
 $('#btnNew').addEventListener('click', e => { if (!newArmed) { newArmed = true; e.target.textContent = 'Spielstand überschreiben?'; return; } startGame(null); });
 
 /* ---------- Aufbau & Schleife ---------- */
-buildNpcs();
+buildNpcs(); buildDungeons();
 for (const z of ZONES) for (const [id, n] of z.mobs) for (let i = 0; i < n; i++) spawnMob(id, { x: z.x, z: z.z, r: z.r });
 for (const i of ISLANDS) for (const [id, n] of i.mobs) for (let k = 0; k < n; k++) spawnMob(id, { x: i.x, z: i.z, r: i.r, y: i.y, isl: true });
 
@@ -631,5 +673,5 @@ function frame() {
 frame();
 
 // Für Tests / Neugierige
-window.WRGAME = { refresh: refreshModel, p, mobs, npcs, cam, startGame, hitMob, gainExp, addItem, castSkill, toggleFly, startAttack, setTarget, nearestMob, openNpc, terrainH, save, keys, loots };
+window.WRGAME = { refresh: refreshModel, portals, p, mobs, npcs, cam, startGame, hitMob, gainExp, addItem, castSkill, toggleFly, startAttack, setTarget, nearestMob, openNpc, terrainH, save, keys, loots };
 })();
