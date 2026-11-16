@@ -7,7 +7,7 @@ Flugbrett zu den Himmelsinseln fliegen. Einzelspieler, läuft komplett im Browse
 ## Starten
 
 - `wolkenreich-standalone.html` doppelklicken (eine Datei, alles enthalten), **oder**
-- `index.html` öffnen (lädt `style.css`, `three.min.js`, `data.js`, `gfx.js`, `models.js`, `game.js`).
+- `index.html` öffnen (lädt `style.css`, `three.min.js`, `data.js`, `gfx.js`, `models.js`, `music.js`, `game.js`).
 
 Nach Änderungen am Code: `node build.js` erzeugt die Standalone-Datei neu.
 
@@ -26,6 +26,7 @@ Nach Änderungen am Code: `node build.js` erzeugt die Standalone-Datei neu.
 - Vier Dungeons mit Elite-Monstern und Endboss: Wurzelkrypta (20–40), Frostgruft (40–60), Glutkern (60–80), Leerenspalt (80–100); die Portale stehen rund ums Dorf. Dungeon-Monster greifen von selbst an und verfolgen dich; eine Barriere öffnet sich erst, wenn der Raum geräumt ist
 - Große Weltkarte (`M`) mit Gebieten, Stufenbereichen, Orten, Dungeon-Portalen und Questziel
 - Drei Dörfer (Luminhafen, Birkenau, Aschenfurt) und sechs Stationen mit Händlern; Wegsteine erlauben Schnellreisen zu besuchten Orten
+- Musik, die live im Browser erzeugt wird und je nach Ort wechselt (Dorf, Wildnis, Himmel, dunkle Gebiete und Dungeons, Bosskampf); Knopf 🎵 schaltet laut, leise, aus
 - Fliegen mit Flugbrett, Minimap, automatisches Speichern (localStorage)
 
 ## Grafik

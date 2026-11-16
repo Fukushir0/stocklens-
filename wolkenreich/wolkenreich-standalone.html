@@ -178,6 +178,7 @@ button.big{font-size:18px;padding:11px 26px;font-weight:bold}
     <button data-win="winChar" title="Charakter (C)">👤</button>
     <button data-win="winInv" title="Inventar (I)">🎒</button>
     <button data-win="winQuest" title="Quests (L)">📜</button>
+    <button id="btnMusic" title="Musik: laut / leise / aus">🎵</button>
     <button data-win="winMap" title="Karte (M)">🗺️</button>
     <button data-win="winHelp" title="Hilfe (H)">❔</button>
   </div>
@@ -1361,6 +1362,71 @@ GFX.mob = function (def) { const g = new T.Group(), anim = MOBS[def.model](g, de
 </script>
 <script>
 'use strict';
+/* Wolkenreich – Musik: wird live im Browser erzeugt (Web Audio), keine Audiodateien */
+const MUSIC = (() => {
+  const SCALES = { major: [0, 2, 4, 5, 7, 9, 11], minor: [0, 2, 3, 5, 7, 8, 10], dorian: [0, 2, 3, 5, 7, 9, 10] };
+  const _ = null;
+  // Melodien als Tonleiterstufen pro Achtelnote (8 Takte × 8 Achtel); null = Pause
+  const MEL = {
+    hell: [[4, _, 2, _, 4, _, 7, _], [8, _, 6, _, 4, _, 6, _], [9, _, 7, _, 5, _, 7, 8], [7, _, 5, _, 3, _, _, _], [4, _, 7, _, 9, _, 7, _], [8, _, 6, _, 8, _, 11, _], [10, _, 9, _, 7, _, 5, _], [6, _, 8, _, 6, _, 4, _]],
+    weit: [[7, _, _, 9, _, _, 11, _], [11, _, 8, _, _, _, 6, _], [12, _, _, 9, _, 7, _, _], [10, _, _, _, 7, _, 5, _], [7, _, 9, _, 11, _, 14, _], [13, _, _, 11, _, _, 8, _], [10, _, 12, _, 10, _, 7, _], [8, _, _, _, 6, _, _, _]],
+    dunkel: [[7, _, _, _, _, _, 9, _], [_, _, 10, _, _, _, _, _], [8, _, _, _, 7, _, _, _], [_, _, _, _, 6, _, _, _], [7, _, _, _, _, _, 11, _], [_, _, 10, _, _, _, 9, _], [8, _, _, _, _, _, 5, _], [6, _, _, _, _, _, _, _]],
+    kampf: [[7, 7, 9, 7, 11, _, 9, _], [12, _, 10, 9, 10, _, 7, _], [13, 13, 11, 13, 14, _, 11, _], [11, _, 9, 8, 6, _, 8, _], [7, 9, 11, 9, 14, _, 11, _], [12, 10, 12, 14, 15, _, 12, _], [13, 11, 13, 15, 16, _, 13, _], [11, 13, 11, 8, 11, _, _, _]],
+  };
+  const MOODS = {
+    town:  { bpm: 88,  root: 60, scale: 'major',  prog: [0, 4, 5, 3, 0, 4, 3, 4], mel: 'hell',   arp: [0, 2, 4, 7, 4, 2, 4, 2], pad: 0.5, lead: 'triangle', drums: 0, bass: 1 },
+    field: { bpm: 104, root: 62, scale: 'major',  prog: [0, 4, 5, 3, 0, 4, 3, 4], mel: 'hell',   arp: [0, 4, 7, 4, 2, 4, 7, 9], pad: 0.4, lead: 'square',   drums: 1, bass: 2 },
+    sky:   { bpm: 76,  root: 65, scale: 'major',  prog: [0, 3, 4, 5, 0, 3, 5, 4], mel: 'weit',   arp: [7, 9, 11, 14, 11, 9, 11, 9], pad: 0.7, lead: 'sine', drums: 0, bass: 1 },
+    dark:  { bpm: 72,  root: 57, scale: 'minor',  prog: [0, 5, 3, 4, 0, 5, 6, 4], mel: 'dunkel', arp: [0, _, 4, _, 2, _, 4, _], pad: 0.8, lead: 'sine',     drums: 0, bass: 1 },
+    boss:  { bpm: 140, root: 50, scale: 'minor',  prog: [0, 5, 6, 4, 0, 5, 3, 4], mel: 'kampf',  arp: [0, 4, 7, 4, 9, 7, 4, 7], pad: 0.35, lead: 'sawtooth', drums: 2, bass: 3 },
+  };
+  let ctx = null, master = null, send = null, mood = 'town', next = 'town', step = 0, tNext = 0, timer = null, vol = 0.5, noiseBuf = null;
+  try { const v = localStorage.getItem('wolkenreich_music'); if (v !== null) vol = +v; } catch (e) { /* egal */ }
+  const freq = m => 440 * Math.pow(2, (m - 69) / 12);
+  const note = (M, deg) => { const sc = SCALES[M.scale], o = Math.floor(deg / 7); return M.root + sc[((deg % 7) + 7) % 7] + o * 12; };
+  function tone(type, f, t, dur, gain, opt = {}) {
+    const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); if (opt.detune) o.detune.value = opt.detune;
+    const a = opt.attack || 0.01; g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(gain, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    let out = g; if (opt.lp) { const flt = ctx.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = opt.lp; g.connect(flt); out = flt; }
+    o.connect(g); out.connect(master); if (opt.echo) out.connect(send); o.start(t); o.stop(t + dur + 0.05);
+  }
+  function noise(t, dur, gain, hp) { const s = ctx.createBufferSource(), g = ctx.createGain(), f = ctx.createBiquadFilter(); s.buffer = noiseBuf; f.type = 'highpass'; f.frequency.value = hp; g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t + dur + 0.02); }
+  function kick(t, gain) { const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.14); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2); o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.22); }
+  function schedule(t) {
+    const M = MOODS[mood], e = 60 / M.bpm / 2, bar = Math.floor(step / 8) % 8, i = step % 8, root = M.prog[bar];
+    if (i === 0) { // Fläche: Akkord über den ganzen Takt
+      for (const d of [0, 2, 4]) for (const dt of [-7, 7]) tone('sawtooth', freq(note(M, root + d)), t, e * 8.2, 0.035 * M.pad, { attack: e * 2, lp: 900, detune: dt });
+      tone('triangle', freq(note(M, root) - 24), t, e * 7.5, M.bass === 1 ? 0.16 : 0.05, { attack: 0.04, lp: 400 });
+    }
+    if (M.bass >= 2 && (M.bass === 3 || i % 2 === 0)) tone('triangle', freq(note(M, root + (i === 6 ? 4 : 0)) - 24), t, e * 0.9, 0.2, { lp: 500 });
+    const a = M.arp[i]; if (a !== null) tone('triangle', freq(note(M, root + a)), t, e * 1.4, 0.05, { echo: true, lp: 2600 });
+    const m = MEL[M.mel][bar][i]; if (m !== null) tone(M.lead, freq(note(M, m) + 12), t, e * (M.mel === 'dunkel' ? 5 : 2.2), M.lead === 'sine' ? 0.1 : M.lead === 'triangle' ? 0.09 : 0.045, { echo: true, attack: 0.02, lp: M.lead === 'sawtooth' ? 2400 : 3600 });
+    if (M.drums) { if (i === 0 || i === 4 || (M.drums === 2 && i === 3)) kick(t, M.drums === 2 ? 0.5 : 0.22); if (M.drums === 2 && (i === 2 || i === 6)) noise(t, 0.12, 0.16, 1800); noise(t, 0.04, M.drums === 2 ? 0.05 : i % 2 ? 0.02 : 0.035, 7000); }
+  }
+  function tick() {
+    if (!ctx || vol <= 0) return; if (tNext < ctx.currentTime) tNext = ctx.currentTime + 0.05;
+    while (tNext < ctx.currentTime + 0.35) { if (step % 8 === 0 && next !== mood) { mood = next; step = 0; } schedule(tNext); tNext += 60 / MOODS[mood].bpm / 2; step++; }
+  }
+  return {
+    start() {
+      if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
+      try {
+        ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = vol * 0.6; const comp = ctx.createDynamicsCompressor(); master.connect(comp); comp.connect(ctx.destination);
+        send = ctx.createGain(); send.gain.value = 0.35; const dl = ctx.createDelay(1), fb = ctx.createGain(); dl.delayTime.value = 0.34; fb.gain.value = 0.32; send.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(master);
+        noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 0.3, ctx.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        timer = setInterval(tick, 90);
+      } catch (e) { ctx = null; }
+    },
+    setMood(m) { if (MOODS[m]) next = m; },
+    get volume() { return vol; },
+    setVolume(v) { vol = v; if (master) master.gain.setTargetAtTime(v * 0.6, ctx.currentTime, 0.1); try { localStorage.setItem('wolkenreich_music', v); } catch (e) { /* egal */ } },
+    get mood() { return mood; },
+  };
+})();
+
+</script>
+<script>
+'use strict';
 /* Wolkenreich – Engine */
 (() => {
 const { CLASSES, SPECS, SKILLS, RAR, SETS, SETF, UPCHANCE, DUNGEONS, PLACES, ITEMS, MOBS, ZONES, ISLANDS, NPCS, QUESTS, HAIRS, MAXLVL, expNeed } = WR;
@@ -1686,7 +1752,9 @@ function resetWins() { winPos = {}; try { localStorage.removeItem(WINPOS_KEY); }
 function showWin(id, on) { const w = $('#' + id); w.classList.toggle('hidden', !on); if (on) { w.style.zIndex = ++zTop; if (winPos[id]) placeWin(w, winPos[id][0], winPos[id][1]); } if (!on && id === 'winNpc') { curNpc = null; shopOpen = false; renderInv(); } if (on) { renderChar(); renderInv(); renderQuests(); } }
 const toggleWin = id => showWin(id, $('#' + id).classList.contains('hidden'));
 document.querySelectorAll('.win .x').forEach(x => x.addEventListener('click', () => showWin(x.closest('.win').id, false)));
-document.querySelectorAll('#menu button').forEach(b => b.addEventListener('click', () => toggleWin(b.dataset.win)));
+document.querySelectorAll('#menu button[data-win]').forEach(b => b.addEventListener('click', () => toggleWin(b.dataset.win)));
+const musicBtn = $('#btnMusic'), showMusic = () => { const v = MUSIC.volume; musicBtn.textContent = v <= 0 ? '🔇' : v < 0.4 ? '🔉' : '🎵'; musicBtn.title = 'Musik: ' + (v <= 0 ? 'aus' : v < 0.4 ? 'leise' : 'laut') + ' (klicken zum Ändern)'; };
+musicBtn.addEventListener('click', () => { const v = MUSIC.volume; MUSIC.start(); MUSIC.setVolume(v > 0.4 ? 0.2 : v > 0 ? 0 : 0.5); showMusic(); log('Musik: ' + (MUSIC.volume <= 0 ? 'aus' : MUSIC.volume < 0.4 ? 'leise' : 'laut'), 'e'); }); showMusic();
 const HELP = `<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> laufen · <b>Klick auf den Boden</b> läuft dorthin · <kbd>Leertaste</kbd> springen<br>
 <b>Maus ziehen</b> dreht die Kamera · <b>Mausrad</b> zoomt<br>
 Monster mit <b style="color:#ff6a5a">rotem Namen</b> greifen von selbst an. <b>Klick auf Monster</b> wählt es aus, <b>zweiter Klick</b> oder <kbd>1</kbd> greift an · <kbd>Tab</kbd> nächstes Ziel<br>
@@ -1984,6 +2052,7 @@ function updateHud(dt) {
     for (const pl of PLACES) if (!p.dun && !p.wp.includes(pl.id) && Math.hypot(p.x - pl.x, p.z - pl.z) < pl.r + 10) { p.wp.push(pl.id); log(`Wegstein entdeckt: ${pl.name}. Du kannst jetzt hierher reisen.`, 'g'); beep(784, 0.25, 'triangle', 0.05, 300); }
     if (p.dun) zn = p.dun.name; else if (here && p.y < here.h + 12) zn = here.name; else if (isl && p.y > isl.y - 2) zn = isl.name || 'Himmelsinseln'; else if (d0 < 82) zn = 'Luminhafen'; else for (const z of ZONES) if (Math.hypot(p.x - z.x, p.z - z.z) < z.r * 1.1) zn = z.name;
     if (zn !== zoneName) { zoneName = zn; const zz = ZONES.find(q => q.name === zn); zoneKey = p.dun ? p.dun.amb : zz ? zz.id : zn === 'Luminhafen' || PLACES.some(q => q.name === zn) ? 'town' : isl ? 'isl' : ''; $('#zone').textContent = zn; if (zn !== 'Wildnis') { const z = ZONES.find(q => q.name === zn); center(zn, z ? `Monster ab Stufe ${MOBS[z.mobs[0][0]].lvl}` : p.dun ? `Dungeon · Stufe ${p.dun.lvl}–${p.dun.max}` : PLACES.some(q => q.name === zn) ? (PLACES.find(q => q.name === zn).type === 'dorf' ? 'Sicheres Dorf' : 'Station') : isl ? `Monster ab Stufe ${MOBS[isl.mobs[0][0]].lvl}` : 'Sicheres Dorf'); } }
+    MUSIC.setMood(mobs.some(m => m.def.boss && !m.dead && m.state === 'chase') ? 'boss' : p.dun || ['wald', 'ruinen', 'glut', 'vulkan', 'moor'].includes(zoneKey) ? 'dark' : zoneKey === 'town' ? 'town' : zoneKey === 'isl' ? 'sky' : 'field');
     for (const n of npcs) { const mk = npcMark(n), html = `${mk ? `<span class="qm">${mk}</span>` : ''}${n.name}<small>${n.role}</small>`; if (n._h !== html) { n._h = html; n.lbl.innerHTML = html; } }
   }
   if (p.dun) { const d = p.dun, alive = [0, 0, 0, 0, 0], pi = dunIdx(d, p.x, p.z); for (const m of mobs) if (m.home.dun === d && !m.dead) alive[m.home.ri]++; for (let i = 1; i < 4; i++) { d.locks[i] = alive[i] > 0 && pi <= i; d.gates[i].visible = alive[i] > 0; } }
@@ -2088,7 +2157,7 @@ setInterval(save, 15000); window.addEventListener('beforeunload', save);
 function startGame(s) {
   if (s) { Object.assign(p, s); p.dun = null; p.wp = Array.isArray(s.wp) ? s.wp : ['luminhafen']; if (p.x > 2000) { p.x = 0; p.z = 16; } p.inv = (s.inv || []).filter(i => ITEMS[i.id]); for (const k in p.equip) if (p.equip[k] && !ITEMS[p.equip[k].id]) p.equip[k] = null; if (p.flying || islandAt(p.x, p.z)) p.y = Math.max(p.y, groundAt(p.x, p.z, p.y)); else p.y = terrainH(p.x, p.z); }
   else { p.name = ($('#nameInput').value.trim() || 'Wanderer').slice(0, 14); p.equip.weapon = { id: 'w_holz', plus: 0 }; p.equip.armor = { id: 'a_0', plus: 0 }; p.inv = [{ id: 'apfel', n: 5 }]; p.hp = maxHP(); p.mp = maxMP(); p.y = terrainH(p.x, p.z); }
-  p.flying = false; refreshModel(); buildHotbar(); started = true; cam.yaw = 0;
+  p.flying = false; refreshModel(); buildHotbar(); started = true; cam.yaw = 0; MUSIC.start();
   $('#start').classList.add('hidden'); $('#hud').classList.remove('hidden');
   if (!s) { log(`Willkommen in Wolkenreich, ${p.name}!`, 'g'); log('Sprich mit der Ältesten Mira (gelbes „!“) für deine erste Quest.', 'e'); showWin('winHelp', true); }
   else log(`Willkommen zurück, ${p.name}!`, 'g');

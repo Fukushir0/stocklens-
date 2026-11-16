@@ -324,7 +324,9 @@ function resetWins() { winPos = {}; try { localStorage.removeItem(WINPOS_KEY); }
 function showWin(id, on) { const w = $('#' + id); w.classList.toggle('hidden', !on); if (on) { w.style.zIndex = ++zTop; if (winPos[id]) placeWin(w, winPos[id][0], winPos[id][1]); } if (!on && id === 'winNpc') { curNpc = null; shopOpen = false; renderInv(); } if (on) { renderChar(); renderInv(); renderQuests(); } }
 const toggleWin = id => showWin(id, $('#' + id).classList.contains('hidden'));
 document.querySelectorAll('.win .x').forEach(x => x.addEventListener('click', () => showWin(x.closest('.win').id, false)));
-document.querySelectorAll('#menu button').forEach(b => b.addEventListener('click', () => toggleWin(b.dataset.win)));
+document.querySelectorAll('#menu button[data-win]').forEach(b => b.addEventListener('click', () => toggleWin(b.dataset.win)));
+const musicBtn = $('#btnMusic'), showMusic = () => { const v = MUSIC.volume; musicBtn.textContent = v <= 0 ? '🔇' : v < 0.4 ? '🔉' : '🎵'; musicBtn.title = 'Musik: ' + (v <= 0 ? 'aus' : v < 0.4 ? 'leise' : 'laut') + ' (klicken zum Ändern)'; };
+musicBtn.addEventListener('click', () => { const v = MUSIC.volume; MUSIC.start(); MUSIC.setVolume(v > 0.4 ? 0.2 : v > 0 ? 0 : 0.5); showMusic(); log('Musik: ' + (MUSIC.volume <= 0 ? 'aus' : MUSIC.volume < 0.4 ? 'leise' : 'laut'), 'e'); }); showMusic();
 const HELP = `<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> laufen · <b>Klick auf den Boden</b> läuft dorthin · <kbd>Leertaste</kbd> springen<br>
 <b>Maus ziehen</b> dreht die Kamera · <b>Mausrad</b> zoomt<br>
 Monster mit <b style="color:#ff6a5a">rotem Namen</b> greifen von selbst an. <b>Klick auf Monster</b> wählt es aus, <b>zweiter Klick</b> oder <kbd>1</kbd> greift an · <kbd>Tab</kbd> nächstes Ziel<br>
@@ -622,6 +624,7 @@ function updateHud(dt) {
     for (const pl of PLACES) if (!p.dun && !p.wp.includes(pl.id) && Math.hypot(p.x - pl.x, p.z - pl.z) < pl.r + 10) { p.wp.push(pl.id); log(`Wegstein entdeckt: ${pl.name}. Du kannst jetzt hierher reisen.`, 'g'); beep(784, 0.25, 'triangle', 0.05, 300); }
     if (p.dun) zn = p.dun.name; else if (here && p.y < here.h + 12) zn = here.name; else if (isl && p.y > isl.y - 2) zn = isl.name || 'Himmelsinseln'; else if (d0 < 82) zn = 'Luminhafen'; else for (const z of ZONES) if (Math.hypot(p.x - z.x, p.z - z.z) < z.r * 1.1) zn = z.name;
     if (zn !== zoneName) { zoneName = zn; const zz = ZONES.find(q => q.name === zn); zoneKey = p.dun ? p.dun.amb : zz ? zz.id : zn === 'Luminhafen' || PLACES.some(q => q.name === zn) ? 'town' : isl ? 'isl' : ''; $('#zone').textContent = zn; if (zn !== 'Wildnis') { const z = ZONES.find(q => q.name === zn); center(zn, z ? `Monster ab Stufe ${MOBS[z.mobs[0][0]].lvl}` : p.dun ? `Dungeon · Stufe ${p.dun.lvl}–${p.dun.max}` : PLACES.some(q => q.name === zn) ? (PLACES.find(q => q.name === zn).type === 'dorf' ? 'Sicheres Dorf' : 'Station') : isl ? `Monster ab Stufe ${MOBS[isl.mobs[0][0]].lvl}` : 'Sicheres Dorf'); } }
+    MUSIC.setMood(mobs.some(m => m.def.boss && !m.dead && m.state === 'chase') ? 'boss' : p.dun || ['wald', 'ruinen', 'glut', 'vulkan', 'moor'].includes(zoneKey) ? 'dark' : zoneKey === 'town' ? 'town' : zoneKey === 'isl' ? 'sky' : 'field');
     for (const n of npcs) { const mk = npcMark(n), html = `${mk ? `<span class="qm">${mk}</span>` : ''}${n.name}<small>${n.role}</small>`; if (n._h !== html) { n._h = html; n.lbl.innerHTML = html; } }
   }
   if (p.dun) { const d = p.dun, alive = [0, 0, 0, 0, 0], pi = dunIdx(d, p.x, p.z); for (const m of mobs) if (m.home.dun === d && !m.dead) alive[m.home.ri]++; for (let i = 1; i < 4; i++) { d.locks[i] = alive[i] > 0 && pi <= i; d.gates[i].visible = alive[i] > 0; } }
@@ -726,7 +729,7 @@ setInterval(save, 15000); window.addEventListener('beforeunload', save);
 function startGame(s) {
   if (s) { Object.assign(p, s); p.dun = null; p.wp = Array.isArray(s.wp) ? s.wp : ['luminhafen']; if (p.x > 2000) { p.x = 0; p.z = 16; } p.inv = (s.inv || []).filter(i => ITEMS[i.id]); for (const k in p.equip) if (p.equip[k] && !ITEMS[p.equip[k].id]) p.equip[k] = null; if (p.flying || islandAt(p.x, p.z)) p.y = Math.max(p.y, groundAt(p.x, p.z, p.y)); else p.y = terrainH(p.x, p.z); }
   else { p.name = ($('#nameInput').value.trim() || 'Wanderer').slice(0, 14); p.equip.weapon = { id: 'w_holz', plus: 0 }; p.equip.armor = { id: 'a_0', plus: 0 }; p.inv = [{ id: 'apfel', n: 5 }]; p.hp = maxHP(); p.mp = maxMP(); p.y = terrainH(p.x, p.z); }
-  p.flying = false; refreshModel(); buildHotbar(); started = true; cam.yaw = 0;
+  p.flying = false; refreshModel(); buildHotbar(); started = true; cam.yaw = 0; MUSIC.start();
   $('#start').classList.add('hidden'); $('#hud').classList.remove('hidden');
   if (!s) { log(`Willkommen in Wolkenreich, ${p.name}!`, 'g'); log('Sprich mit der Ältesten Mira (gelbes „!“) für deine erste Quest.', 'e'); showWin('winHelp', true); }
   else log(`Willkommen zurück, ${p.name}!`, 'g');
